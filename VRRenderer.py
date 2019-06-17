@@ -501,7 +501,7 @@ class VRRenderer:
                                                           2*imageResult1.size[1])
                     imageResult = bpy.data.images[image_name]
                     imageResult.scale(imageResult1.size[0], 2*imageResult1.size[1])
-                    imageResult.pixels = list(imageResult1.pixels) + list(imageResult2.pixels)
+                    imageResult.pixels = list(imageResult2.pixels) + list(imageResult1.pixels)
                     bpy.data.images.remove(imageResult1)
                     bpy.data.images.remove(imageResult2)
                     
@@ -529,7 +529,7 @@ class VRRenderer:
                                                       2*imageResult1.size[1])
                 imageResult = bpy.data.images[image_name]
                 imageResult.scale(imageResult1.size[0], 2*imageResult1.size[1])
-                imageResult.pixels = list(imageResult1.pixels) + list(imageResult2.pixels)
+                imageResult.pixels = list(imageResult2.pixels) + list(imageResult1.pixels)
                 bpy.data.images.remove(imageResult1)
                 bpy.data.images.remove(imageResult2)
                 
