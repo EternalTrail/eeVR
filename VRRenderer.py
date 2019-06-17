@@ -358,7 +358,7 @@ class VRRenderer:
             os.remove(filename)
     
     
-    def render_image(self, direcation):
+    def render_image(self, direction):
         
         # Render the image and load it into the script
         tmp = bpy.data.scenes['Scene'].render.filepath
@@ -474,9 +474,6 @@ class VRRenderer:
         
         # Render the image or video
         if self.is_animation:
-            
-            # Create a folder to store the frames of the animation
-            os.mkdir(time_now)
             
             # Find which frames need to be rendered
             frame_start = bpy.context.scene.frame_start
