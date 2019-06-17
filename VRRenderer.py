@@ -516,7 +516,7 @@ class VRRenderer:
             
             # Render the images and return their names
             imageList, imageList2 = self.render_images()
-            image_name = "Render Result"
+            image_name = "RenderResult"
             
             # Convert the rendered images to equirectangular projection image and save it to the disk
             if self.is_stereo:
