@@ -299,7 +299,7 @@ class VRRenderer:
             bpy.data.images.remove(image)
         
         # Copy the pixels from the buffer to an image object
-        if not outputName in bpy.data.images:
+        if not outputName in bpy.data.images.keys():
             bpy.data.images.new(outputName, width, height)
         imageRes = bpy.data.images[outputName]
         imageRes.scale(width, height)
@@ -351,13 +351,14 @@ class VRRenderer:
         self.camera.data.shift_y = 0
         bpy.context.scene.render.resolution_x = self.image_size[0]
         bpy.context.scene.render.resolution_y = self.image_size[1]
-        bpy.context.scene.render.image_settings.views_format = self.view_format
-        bpy.context.scene.render.image_settings.stereo_3d_format.display_mode = self.stereo_mode
+        if self.is_stereo:
+            bpy.context.scene.render.image_settings.views_format = self.view_format
+            bpy.context.scene.render.image_settings.stereo_3d_format.display_mode = self.stereo_mode
         for filename in self.createdFiles:
             os.remove(filename)
     
     
-    def render_image(self, direction):
+    def render_image(self, direcation):
         
         # Render the image and load it into the script
         tmp = bpy.data.scenes['Scene'].render.filepath
@@ -536,7 +537,7 @@ class VRRenderer:
                 bpy.data.images.remove(imageResult2)
                 
             else:
-                imageResult = self.cubemap_to_equirectangular(imageList, "Render Result")
+                imageResult = self.cubemap_to_equirectangular(imageList, "RenderResult")
             imageResult.save_render(self.path+"Render Result {}.png".format(time_now))
         self.clean_up()
         
