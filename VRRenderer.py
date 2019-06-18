@@ -376,15 +376,15 @@ class VRRenderer:
             bpy.context.scene.render.use_multiview = False
             tmp_loc = list(self.camera.location)
             camera_angle = self.direction_offsets['front'][2]
-            self.camera.location = [tmp_loc[0]-(0.25*self.IPD*cos(camera_angle)),\
-                                    tmp_loc[1]-(0.25*self.IPD*sin(camera_angle)),\
+            self.camera.location = [tmp_loc[0]-(self.IPD*cos(camera_angle)),\
+                                    tmp_loc[1]-(self.IPD*sin(camera_angle)),\
                                     tmp_loc[2]]
             bpy.data.scenes['Scene'].render.filepath = self.path + imageL
             bpy.ops.render.render(write_still=True)
             renderedImageL = bpy.data.images.load(self.path + imageL)
             
-            self.camera.location = [tmp_loc[0]+(0.25*self.IPD*cos(camera_angle)),\
-                                    tmp_loc[1]+(0.25*self.IPD*sin(camera_angle)),\
+            self.camera.location = [tmp_loc[0]+(self.IPD*cos(camera_angle)),\
+                                    tmp_loc[1]+(self.IPD*sin(camera_angle)),\
                                     tmp_loc[2]]
             bpy.data.scenes['Scene'].render.filepath = self.path + imageR
             bpy.ops.render.render(write_still=True)
@@ -417,11 +417,11 @@ class VRRenderer:
             
             # Split the render into two images
             if direction == 'back':
-                renderedImageR.pixels = renderedImage.pixels[int(imageLen/2):]
-                renderedImageL.pixels = renderedImage.pixels[0:int(imageLen/2)]
-            else:
                 renderedImageL.pixels = renderedImage.pixels[int(imageLen/2):]
                 renderedImageR.pixels = renderedImage.pixels[0:int(imageLen/2)]
+            else:
+                renderedImageR.pixels = renderedImage.pixels[int(imageLen/2):]
+                renderedImageL.pixels = renderedImage.pixels[0:int(imageLen/2)]
             renderedImageL.pack()
             renderedImageR.pack()
             bpy.data.images.remove(renderedImage)
