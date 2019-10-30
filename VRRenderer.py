@@ -11,6 +11,10 @@ class VRRenderer:
     
     def __init__(self, is_stereo = False, is_animation = False, is_180 = True):
         
+        # Check if the file is saved or not, can cause errors when not saved
+        if bpy.data.is_saved:
+            raise PermissionError("Save file before rendering")
+        
         # Set internal variables for the class
         self.camera = bpy.context.scene.camera
         self.path = bpy.path.abspath("//")
@@ -22,6 +26,16 @@ class VRRenderer:
         # Get initial camera and output information
         self.camera_rotation = list(self.camera.rotation_euler)
         self.IPD = self.camera.data.stereo.interocular_distance
+        self.camera_type = self.camera.data.type
+        self.camera_angle = self.camera.data.angle
+        self.stereo_type = self.camera.data.stereo.convergence_mode
+        self.stereo_pivot = self.camera.data.stereo.pivot
+        
+        # Set camera variables for proper result
+        self.camera.data.type = 'PANO'
+        self.camera.data.stereo.convergence_mode = 'PARALLEL'
+        self.camera.data.stereo.pivot = 'CENTER'
+        self.camera.data.angle = pi/2
         
         self.image_size = [bpy.context.scene.render.resolution_x,\
                            bpy.context.scene.render.resolution_y]
@@ -346,6 +360,10 @@ class VRRenderer:
     def clean_up(self):
         
         # Reset all the variables that were changed
+        self.camera.data.type = self.camera_type
+        self.camera.data.stereo.convergence_mode = self.stereo_type
+        self.camera.data.stereo.pivot = self.stereo_pivot
+        self.camera.data.angle = self.camera_angle
         self.camera.rotation_euler = self.camera_rotation
         self.camera.data.shift_x = 0
         self.camera.data.shift_y = 0
@@ -376,15 +394,15 @@ class VRRenderer:
             bpy.context.scene.render.use_multiview = False
             tmp_loc = list(self.camera.location)
             camera_angle = self.direction_offsets['front'][2]
-            self.camera.location = [tmp_loc[0]-(self.IPD*cos(camera_angle)),\
-                                    tmp_loc[1]-(self.IPD*sin(camera_angle)),\
+            self.camera.location = [tmp_loc[0]+(0.5*self.IPD*cos(camera_angle)),\
+                                    tmp_loc[1]+(0.5*self.IPD*sin(camera_angle)),\
                                     tmp_loc[2]]
             bpy.data.scenes['Scene'].render.filepath = self.path + imageL
             bpy.ops.render.render(write_still=True)
             renderedImageL = bpy.data.images.load(self.path + imageL)
             
-            self.camera.location = [tmp_loc[0]+(self.IPD*cos(camera_angle)),\
-                                    tmp_loc[1]+(self.IPD*sin(camera_angle)),\
+            self.camera.location = [tmp_loc[0]-(0.5*self.IPD*cos(camera_angle)),\
+                                    tmp_loc[1]-(0.5*self.IPD*sin(camera_angle)),\
                                     tmp_loc[2]]
             bpy.data.scenes['Scene'].render.filepath = self.path + imageR
             bpy.ops.render.render(write_still=True)
