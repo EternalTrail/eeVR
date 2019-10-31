@@ -39,9 +39,9 @@ class VRRenderer:
         
         self.image_size = [bpy.context.scene.render.resolution_x,\
                            bpy.context.scene.render.resolution_y]
-        self.side_resolution = max(self.image_size) if ((max(self.image_size)%2)==0)\
-                               else max(self.image_size)+1
-                
+        
+        self.side_resolution = int(max(self.image_size)+4-max(self.image_size)%4)/2 if max(self.image_size)%4 > 0\
+                               else int(max(self.image_size)/2)
         if self.is_stereo:
             self.view_format = bpy.context.scene.render.image_settings.views_format
             bpy.context.scene.render.image_settings.views_format = 'STEREO_3D'
@@ -214,12 +214,9 @@ class VRRenderer:
             imageBack.colorspace_settings.name='Linear'
             imageBack.gl_load()
         
-        # Find the size of the final image
-        if self.is_180:
-            width = 2*self.side_resolution
-        else:
-            width = 4*self.side_resolution
-        height = 2*self.side_resolution
+        # set the size of the final image
+        width = self.image_size[0]
+        height = self.image_size[1]
 
         # Create an offscreen render buffer and texture
         offscreen = gpu.types.GPUOffScreen(width, height)
