@@ -12,7 +12,7 @@ class VRRenderer:
     def __init__(self, is_stereo = False, is_animation = False, is_180 = True):
         
         # Check if the file is saved or not, can cause errors when not saved
-        if bpy.data.is_saved:
+        if not bpy.data.is_saved:
             raise PermissionError("Save file before rendering")
         
         # Set internal variables for the class
