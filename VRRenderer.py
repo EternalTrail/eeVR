@@ -521,7 +521,7 @@ class VRRenderer:
                     bpy.data.images.remove(imageResult2)
                     
                 else:
-                    imageResult = self.cubemap_to_equirectangular(imageList, "Render Result")
+                    imageResult = self.cubemap_to_equirectangular(imageList, "RenderResult")
                 imageResult.save_render(self.path+folder_name+image_name)
                 bpy.data.images.remove(imageResult)
                 bpy.context.scene.frame_set(frame_start+i*frame_step)
