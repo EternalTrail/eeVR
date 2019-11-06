@@ -9,7 +9,7 @@ from gpu_extras.batch import batch_for_shader
 
 class VRRenderer:
     
-    def __init__(self, is_stereo = False, is_animation = False, mode = 'EQUI180'):
+    def __init__(self, is_stereo = False, is_animation = False, mode = 'EQUI', FOV = 180):
         
         # Check if the file is saved or not, can cause errors when not saved
         if not bpy.data.is_saved:
@@ -20,8 +20,10 @@ class VRRenderer:
         self.path = bpy.path.abspath("//")
         self.is_stereo = is_stereo
         self.is_animation = is_animation
-        self.is_180 = True if mode in {'EQUI180','DOME'} else False
-        self.is_dome = True if mode == 'DOME' else False
+        self.FOV = FOV
+        self.no_back_image = (self.FOV <= 270)
+        self.no_side_images = (self.FOV <= 90) # TODO - Not implemented yet
+        self.is_dome = (mode == 'DOME')
         self.createdFiles = set()
         
         # Get initial camera and output information
@@ -50,11 +52,12 @@ class VRRenderer:
             bpy.context.scene.render.image_settings.stereo_3d_format.display_mode = 'TOPBOTTOM'
 
         self.direction_offsets = self.find_direction_offsets()
-        if self.is_180:
-            self.camera_shift = {'top':[0.0, -0.25, self.side_resolution, self.side_resolution/2],\
-                                 'bottom':[0.0, 0.25, self.side_resolution, self.side_resolution/2],\
-                                 'left':[0.25, 0.0, self.side_resolution/2, self.side_resolution],\
-                                 'right':[-0.25, 0.0, self.side_resolution/2, self.side_resolution],\
+        if self.no_back_image:
+            fract = (self.FOV-90)/180
+            self.camera_shift = {'top':[0.0, 0.5*(fract-1), self.side_resolution, fract*self.side_resolution],\
+                                 'bottom':[0.0, 0.5*(1-fract), self.side_resolution, fract*self.side_resolution],\
+                                 'left':[0.5*(1-fract), 0.0, fract*self.side_resolution, self.side_resolution],\
+                                 'right':[0.5*(fract-1), 0.0, fract*self.side_resolution, self.side_resolution],\
                                  'front':[0.0, 0.0, self.side_resolution, self.side_resolution]}
     
     
@@ -139,10 +142,13 @@ class VRRenderer:
 
             out vec4 fragColor;
 
-            void main() {
+            void main() {{
             
                 // Calculate the pointing angle
-                float azimuth = vTexCoord.x * PI / 2.0;
+                float fovd = {0};
+                float fovfrac = fovd/360.0;
+                float sidefrac = (fovd-90.0)/180;
+                float azimuth = vTexCoord.x * PI * fovfrac;
                 float elevation = vTexCoord.y * PI / 2.0;
                 
                 // Calculate the pointing vector
@@ -152,23 +158,23 @@ class VRRenderer:
                 pt.z = cos(elevation) * cos(azimuth);
                 
                 // Select the correct pixel
-                if ((abs(pt.x) >= abs(pt.y)) && (abs(pt.x) >= abs(pt.z))) {
-                    if (pt.x <= 0.0) {
-                        fragColor = texture(cubeLeftImage, vec2(((-pt.z/pt.x)),((-pt.y/pt.x)+1.0)/2.0));
-                    } else {
-                        fragColor = texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0),((pt.y/pt.x)+1.0)/2.0));
-                    }
-                } else if (abs(pt.y) >= abs(pt.z)) {
-                    if (pt.y <= 0.0) {
-                        fragColor = texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y))));
-                    } else {
-                        fragColor = texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)));
-                    }
-                } else {
+                if ((abs(pt.x) >= abs(pt.y)) && (abs(pt.x) >= abs(pt.z))) {{
+                    if (pt.x <= 0.0) {{
+                        fragColor = texture(cubeLeftImage, vec2((((-pt.z/pt.x))+(2.0*sidefrac-1.0))/(2.0*sidefrac),((-pt.y/pt.x)+1.0)/2.0));
+                    }} else {{
+                        fragColor = texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0)/(2.0*sidefrac),((pt.y/pt.x)+1.0)/2.0));
+                    }}
+                }} else if (abs(pt.y) >= abs(pt.z)) {{
+                    if (pt.y <= 0.0) {{
+                        fragColor = texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+(2.0*sidefrac-1.0))/(2.0*sidefrac)));
+                    }} else {{
+                        fragColor = texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/(2.0*sidefrac)));
+                    }}
+                }} else {{
                     fragColor = texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
-                }
-            }
-        '''
+                }}
+            }}
+        '''.format(self.FOV)
 
         # Define the fragment shader for the dome conversion
         fragment_shader_dome = '''
@@ -180,22 +186,25 @@ class VRRenderer:
             uniform sampler2D cubeBottomImage;
             uniform sampler2D cubeTopImage;
             uniform sampler2D cubeFrontImage;
+            uniform sampler2D cubeBackImage;
 
             in vec2 vTexCoord;
 
             out vec4 fragColor;
 
-            void main() {
+            void main() {{
 
-                float fovd = 180.0; // input: field of view in degrees
-                float hfov = fovd*PI/360.0;
+                float fovd = {0};
+                float fovfrac = fovd/360.0;
+                float sidefrac = (fovd-90.0)/180;
+                float hfov = fovfrac*PI;
                 vec2 d = vTexCoord.xy;
 
                 float r = length( d );
-                if( r > 1.0 ) {
+                if( r > 1.0 ) {{
                     fragColor = vec4(0.0, 0.0, 0.0, 1.0);
                     return;
-                }
+                }}
                 
                 vec2 dunit = normalize( d );
                 float phi = r * hfov;
@@ -204,23 +213,27 @@ class VRRenderer:
                 pt.z = cos( phi );  // Select the correct pixel
                 
                 // Select the correct pixel
-                if ((abs(pt.x) >= abs(pt.y)) && (abs(pt.x) >= abs(pt.z))) {
-                    if (pt.x <= 0.0) {
-                        fragColor = texture(cubeLeftImage, vec2(((-pt.z/pt.x)),((-pt.y/pt.x)+1.0)/2.0));
-                    } else {
-                        fragColor = texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0),((pt.y/pt.x)+1.0)/2.0));
-                    }
-                } else if (abs(pt.y) >= abs(pt.z)) {
-                    if (pt.y <= 0.0) {
-                        fragColor = texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y))));
-                    } else {
-                        fragColor = texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)));
-                    }
-                } else {
-                    fragColor = texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
-                }
-            }
-        '''
+                if ((abs(pt.x) >= abs(pt.y)) && (abs(pt.x) >= abs(pt.z))) {{
+                    if (pt.x <= 0.0) {{
+                        fragColor = texture(cubeLeftImage, vec2((((-pt.z/pt.x))+(2.0*sidefrac-1.0))/(2.0*sidefrac),((-pt.y/pt.x)+1.0)/2.0));
+                    }} else {{
+                        fragColor = texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0)/(2.0*sidefrac),((pt.y/pt.x)+1.0)/2.0));
+                    }}
+                }} else if (abs(pt.y) >= abs(pt.z)) {{
+                    if (pt.y <= 0.0) {{
+                        fragColor = texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+(2.0*sidefrac-1.0))/(2.0*sidefrac)));
+                    }} else {{
+                        fragColor = texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/(2.0*sidefrac)));
+                    }}
+                }} else {{
+                    if (pt.z <= 0.0) {{
+                        fragColor = texture(cubeBackImage, vec2(((pt.x/pt.z)+1.0)/2.0,((-pt.y/pt.z)+1.0)/2.0));
+                    }} else {{
+                        fragColor = texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
+                    }}
+                }}
+            }}
+        '''.format(self.FOV)
         
         # Generate the OpenGL shader
         pos = [(-1.0, -1.0, -1.0),  # left,  bottom, back
@@ -235,7 +248,7 @@ class VRRenderer:
         if self.is_dome:
             shader = gpu.types.GPUShader(vertex_shader, fragment_shader_dome)
         else:
-            if self.is_180:
+            if self.no_back_image:
                 shader = gpu.types.GPUShader(vertex_shader, fragment_shader_180)
             else:
                 shader = gpu.types.GPUShader(vertex_shader, fragment_shader_360)
@@ -265,7 +278,7 @@ class VRRenderer:
         imageFront.colorspace_settings.name='Linear'
         imageFront.gl_load()
         
-        if not self.is_180:
+        if not self.no_back_image:
             imageBack = imageList[5]
             imageBack.colorspace_settings.name='Linear'
             imageBack.gl_load()
@@ -324,7 +337,7 @@ class VRRenderer:
             bgl.glTexParameteri(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_WRAP_T, bgl.GL_CLAMP_TO_EDGE)
             shader.uniform_int("cubeFrontImage", 4)
             
-            if not self.is_180:
+            if not self.no_back_image:
                 bgl.glActiveTexture(bgl.GL_TEXTURE5)
                 bgl.glBindTexture(bgl.GL_TEXTURE_2D, imageBack.bindcode)
                 bgl.glTexParameterf(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_MIN_FILTER, bgl.GL_LINEAR );
@@ -351,7 +364,7 @@ class VRRenderer:
             imageBottom.gl_free()
             imageTop.gl_free()
             imageFront.gl_free()
-            if not self.is_180:
+            if not self.no_back_image:
                 imageBack.gl_free()
             
             # Read the resulting pixels into a buffer
@@ -403,7 +416,7 @@ class VRRenderer:
         # Set the camera to the required postion    
         self.camera.rotation_euler = self.direction_offsets[direction]
         
-        if self.is_180:
+        if self.no_back_image:
             self.camera.data.shift_x = self.camera_shift[direction][0]
             self.camera.data.shift_y = self.camera_shift[direction][1]
             bpy.context.scene.render.resolution_x = self.camera_shift[direction][2]
@@ -477,7 +490,7 @@ class VRRenderer:
                 bpy.data.images.remove(bpy.data.images[imageR])
             renderedImage =  bpy.data.images.load(self.path + image_name)
             imageLen = len(renderedImage.pixels)
-            if self.is_180 and direction in {'top', 'bottom'}:
+            if self.no_back_image and direction in {'top', 'bottom'}:
                 renderedImageL = bpy.data.images.new(imageL, self.side_resolution,\
                                                      int(self.side_resolution/2))
                 renderedImageR = bpy.data.images.new(imageR, self.side_resolution,\
@@ -519,7 +532,7 @@ class VRRenderer:
         
         self.direction_offsets = self.find_direction_offsets()
         for direction in directions:
-            if direction == 'back' and self.is_180:
+            if direction == 'back' and self.no_back_image:
                 continue
             else:
                 self.set_camera_direction(direction)
@@ -621,7 +634,8 @@ class RenderImage(Operator):
     def execute(self, context):
         
         mode = bpy.context.scene.renderModeEnum
-        return VRRenderer(bpy.context.scene.render.use_multiview, False, mode).render_and_save()
+        FOV = bpy.context.scene.renderFOV
+        return VRRenderer(bpy.context.scene.render.use_multiview, False, mode, FOV).render_and_save()
 
 
 class RenderAnimation(Operator):
@@ -633,7 +647,8 @@ class RenderAnimation(Operator):
     def execute(self, context):
         
         mode = bpy.context.scene.renderModeEnum
-        return VRRenderer(bpy.context.scene.render.use_multiview, True, mode).render_and_save()
+        FOV = bpy.context.scene.renderFOV
+        return VRRenderer(bpy.context.scene.render.use_multiview, True, mode, FOV).render_and_save()
 
 
 
@@ -651,6 +666,7 @@ class RenderToolsPanel(Panel):
         layout = self.layout
         col = layout.column()
         col.prop(context.scene, 'renderModeEnum')
+        col.prop(context.scene, 'renderFOV')
         col.operator("wl.render_image", text="Render Image")
         col.operator("wl.render_animation", text="Render Animation")
 
@@ -658,11 +674,12 @@ class RenderToolsPanel(Panel):
 # Register all classes
 def register():
     bpy.types.Scene.renderModeEnum = bpy.props.EnumProperty(
-        items = [('EQUI180', '180 Equi', 'Renders in 180 degrees equirectangular projection'), 
-                 ('EQUI360', '360 Equi', 'Renders in 180 degrees equirectangular projection'),
-                 ('DOME', '180 Dome', 'Renders in 180 degrees dome projection')],
-        default='EQUI180',
+        items = [('EQUI', 'Equirectangular', 'Renders in equirectangular projection'),
+                 ('DOME', 'Full Dome', 'Renders in full dome projection')],
+        default='EQUI',
         name="Mode")
+    bpy.types.Scene.renderFOV = bpy.props.FloatProperty(180.0,default=180.0, name="FOV", min=180, max=360,
+                                description="Field of view in degrees")
     bpy.utils.register_class(RenderImage)
     bpy.utils.register_class(RenderAnimation)
     bpy.utils.register_class(RenderToolsPanel)
@@ -671,6 +688,8 @@ def register():
 
 # Unregister all classes
 def unregister():
+    del bpy.types.Scene.renderModeEnum
+    del bpy.types.Scene.renderFOV
     bpy.utils.unregister_class(RenderImage)
     bpy.utils.unregister_class(RenderAnimation)
     bpy.utils.unregister_class(RenderToolsPanel)
