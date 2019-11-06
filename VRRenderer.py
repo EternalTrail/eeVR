@@ -87,7 +87,7 @@ class VRRenderer:
 
             in vec2 vTexCoord;
 
-            out vec4 gl_FragColor;
+            out vec4 fragColor;
 
             void main() {
             
@@ -104,21 +104,21 @@ class VRRenderer:
                 // Select the correct pixel
                 if ((abs(pt.x) >= abs(pt.y)) && (abs(pt.x) >= abs(pt.z))) {
                     if (pt.x <= 0.0) {
-                        gl_FragColor = texture(cubeLeftImage, vec2(((-pt.z/pt.x)+1.0)/2.0,((-pt.y/pt.x)+1.0)/2.0));
+                        fragColor = texture(cubeLeftImage, vec2(((-pt.z/pt.x)+1.0)/2.0,((-pt.y/pt.x)+1.0)/2.0));
                     } else {
-                        gl_FragColor = texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0)/2.0,((pt.y/pt.x)+1.0)/2.0));
+                        fragColor = texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0)/2.0,((pt.y/pt.x)+1.0)/2.0));
                     }
                 } else if (abs(pt.y) >= abs(pt.z)) {
                     if (pt.y <= 0.0) {
-                        gl_FragColor = texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/2.0));
+                        fragColor = texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/2.0));
                     } else {
-                        gl_FragColor = texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/2.0));
+                        fragColor = texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/2.0));
                     }
                 } else {
                     if (pt.z <= 0.0) {
-                        gl_FragColor = texture(cubeBackImage, vec2(((pt.x/pt.z)+1.0)/2.0,((-pt.y/pt.z)+1.0)/2.0));
+                        fragColor = texture(cubeBackImage, vec2(((pt.x/pt.z)+1.0)/2.0,((-pt.y/pt.z)+1.0)/2.0));
                     } else {
-                        gl_FragColor = texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
+                        fragColor = texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
                     }
                 }
             }
@@ -137,7 +137,7 @@ class VRRenderer:
 
             in vec2 vTexCoord;
 
-            out vec4 gl_FragColor;
+            out vec4 fragColor;
 
             void main() {
             
@@ -154,18 +154,18 @@ class VRRenderer:
                 // Select the correct pixel
                 if ((abs(pt.x) >= abs(pt.y)) && (abs(pt.x) >= abs(pt.z))) {
                     if (pt.x <= 0.0) {
-                        gl_FragColor = texture(cubeLeftImage, vec2(((-pt.z/pt.x)),((-pt.y/pt.x)+1.0)/2.0));
+                        fragColor = texture(cubeLeftImage, vec2(((-pt.z/pt.x)),((-pt.y/pt.x)+1.0)/2.0));
                     } else {
-                        gl_FragColor = texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0),((pt.y/pt.x)+1.0)/2.0));
+                        fragColor = texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0),((pt.y/pt.x)+1.0)/2.0));
                     }
                 } else if (abs(pt.y) >= abs(pt.z)) {
                     if (pt.y <= 0.0) {
-                        gl_FragColor = texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y))));
+                        fragColor = texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y))));
                     } else {
-                        gl_FragColor = texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)));
+                        fragColor = texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)));
                     }
                 } else {
-                    gl_FragColor = texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
+                    fragColor = texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
                 }
             }
         '''
