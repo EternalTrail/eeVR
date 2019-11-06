@@ -9,7 +9,7 @@ from gpu_extras.batch import batch_for_shader
 
 class VRRenderer:
     
-    def __init__(self, is_stereo = False, is_animation = False, is_180 = True):
+    def __init__(self, is_stereo = False, is_animation = False, is_180 = True, is_dome = False):
         
         # Check if the file is saved or not, can cause errors when not saved
         if not bpy.data.is_saved:
@@ -20,7 +20,8 @@ class VRRenderer:
         self.path = bpy.path.abspath("//")
         self.is_stereo = is_stereo
         self.is_animation = is_animation
-        self.is_180 = is_180                                 
+        self.is_180 = is_180
+        self.is_dome = is_dome
         self.createdFiles = set()
         
         # Get initial camera and output information
@@ -169,6 +170,63 @@ class VRRenderer:
             }
         '''
 
+        # Define the fragment shader for the dome conversion
+        fragment_shader_dome = '''
+            #define PI 3.1415926535897932384626
+            
+            // Input cubemap textures
+            uniform sampler2D cubeLeftImage;
+            uniform sampler2D cubeRightImage;
+            uniform sampler2D cubeBottomImage;
+            uniform sampler2D cubeTopImage;
+            uniform sampler2D cubeBackImage;
+            uniform sampler2D cubeFrontImage;
+
+            in vec2 vTexCoord;
+
+            out vec4 fragColor;
+
+            void main() {
+
+                float fovd = 180.0; // input: field of view in degrees
+                float hfov = fovd*PI/360.0;
+                vec2 d = vTexCoord.xy;
+
+                float r = length( d );
+                if( r > 1.0 ) {
+                    fragColor = vec4(0.0, 0.0, 0.0, 1.0);
+                    return;
+                }
+                
+                vec2 dunit = normalize( d );
+                float phi = r * hfov;
+                vec3 pt = vec3( 1.0, 1.0, 1.0 );
+                pt.xy = dunit * sin( phi );
+                pt.z = cos( phi );  // Select the correct pixel
+                
+                // Select the correct pixel
+                if ((abs(pt.x) >= abs(pt.y)) && (abs(pt.x) >= abs(pt.z))) {
+                    if (pt.x <= 0.0) {
+                        fragColor = texture(cubeLeftImage, vec2(((-pt.z/pt.x)+1.0)/2.0,((-pt.y/pt.x)+1.0)/2.0));
+                    } else {
+                        fragColor = texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0)/2.0,((pt.y/pt.x)+1.0)/2.0));
+                    }
+                } else if (abs(pt.y) >= abs(pt.z)) {
+                    if (pt.y <= 0.0) {
+                        fragColor = texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/2.0));
+                    } else {
+                        fragColor = texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/2.0));
+                    }
+                } else {
+                    if (pt.z <= 0.0) {
+                        fragColor = texture(cubeBackImage, vec2(((pt.x/pt.z)+1.0)/2.0,((-pt.y/pt.z)+1.0)/2.0));
+                    } else {
+                        fragColor = texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
+                    }
+                }
+            }
+        '''
+        
         # Generate the OpenGL shader
         pos = [(-1.0, -1.0, -1.0),  # left,  bottom, back
                (-1.0,  1.0, -1.0),  # left,  top,    back
@@ -179,10 +237,13 @@ class VRRenderer:
                   (1.0, -1.0),   # right, bottom
                   (1.0,  1.0)]   # right, top
         vertexIndices = [(0, 3, 1),(3, 0, 2)]
-        if self.is_180:
-            shader = gpu.types.GPUShader(vertex_shader, fragment_shader_180)
+        if self.is_dome:
+            shader = gpu.types.GPUShader(vertex_shader, fragment_shader_dome)
         else:
-            shader = gpu.types.GPUShader(vertex_shader, fragment_shader_360)
+            if self.is_180:
+                shader = gpu.types.GPUShader(vertex_shader, fragment_shader_180)
+            else:
+                shader = gpu.types.GPUShader(vertex_shader, fragment_shader_360)
         batch = batch_for_shader(shader, 'TRIS', {"aVertexPosition": pos,\
                                                   "aVertexTextureCoord": coords},\
                                                   indices=vertexIndices)
@@ -564,7 +625,7 @@ class RenderImage360(Operator):
     
     def execute(self, context):
         
-        return VRRenderer(bpy.context.scene.render.use_multiview, False, False).render_and_save()
+        return VRRenderer(bpy.context.scene.render.use_multiview, False, False, False).render_and_save()
 
 
 class RenderVideo360(Operator):
@@ -575,7 +636,7 @@ class RenderVideo360(Operator):
     
     def execute(self, context):
 
-        return VRRenderer(bpy.context.scene.render.use_multiview, True, False).render_and_save()
+        return VRRenderer(bpy.context.scene.render.use_multiview, True, False, False).render_and_save()
 
 
 class RenderImage180(Operator):
@@ -586,7 +647,7 @@ class RenderImage180(Operator):
     
     def execute(self, context):
 
-        return VRRenderer(bpy.context.scene.render.use_multiview, False, True).render_and_save()
+        return VRRenderer(bpy.context.scene.render.use_multiview, False, True, False).render_and_save()
 
 
 class RenderVideo180(Operator):
@@ -597,9 +658,31 @@ class RenderVideo180(Operator):
     
     def execute(self, context):
 
-        return VRRenderer(bpy.context.scene.render.use_multiview, True, True).render_and_save()
+        return VRRenderer(bpy.context.scene.render.use_multiview, True, True, False).render_and_save()
 
     
+class RenderDomeImage(Operator):
+    """Render a dome image"""
+    
+    bl_idname = 'wl.render_dome_image'
+    bl_label = "Render a dome image"
+    
+    def execute(self, context):
+        
+        return VRRenderer(bpy.context.scene.render.use_multiview, False, False, True).render_and_save()
+
+
+class RenderDomeVideo(Operator):
+    """Render a dome video"""
+    
+    bl_idname = 'wl.render_dome_video'
+    bl_label = "Render a dome video"
+    
+    def execute(self, context):
+        
+        return VRRenderer(bpy.context.scene.render.use_multiview, True, False, True).render_and_save()
+
+
 class RenderToolsPanel(Panel):
     """Tools panel for VR rendering"""
     
@@ -617,6 +700,8 @@ class RenderToolsPanel(Panel):
         col.operator("wl.render_360_video", text="360 Video")
         col.operator("wl.render_180_image", text="180 Image")
         col.operator("wl.render_180_video", text="180 Video")
+        col.operator("wl.render_dome_image", text="Dome Image")
+        col.operator("wl.render_dome_video", text="Dome Video")
 
 
 # Register all classes
@@ -625,6 +710,8 @@ def register():
     bpy.utils.register_class(RenderVideo360)
     bpy.utils.register_class(RenderImage180)
     bpy.utils.register_class(RenderVideo180)
+    bpy.utils.register_class(RenderDomeImage)
+    bpy.utils.register_class(RenderDomeVideo)
     bpy.utils.register_class(RenderToolsPanel)
 
 
@@ -634,6 +721,8 @@ def unregister():
     bpy.utils.unregister_class(RenderVideo360)
     bpy.utils.unregister_class(RenderImage180)
     bpy.utils.unregister_class(RenderVideo180)
+    bpy.utils.unregister_class(RenderDomeImage)
+    bpy.utils.unregister_class(RenderDomeVideo)
     bpy.utils.unregister_class(RenderToolsPanel)
 
 
