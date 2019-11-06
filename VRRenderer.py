@@ -9,7 +9,7 @@ from gpu_extras.batch import batch_for_shader
 
 class VRRenderer:
     
-    def __init__(self, is_stereo = False, is_animation = False, is_180 = True, is_dome = False):
+    def __init__(self, is_stereo = False, is_animation = False, mode = 'EQUI180'):
         
         # Check if the file is saved or not, can cause errors when not saved
         if not bpy.data.is_saved:
@@ -20,8 +20,8 @@ class VRRenderer:
         self.path = bpy.path.abspath("//")
         self.is_stereo = is_stereo
         self.is_animation = is_animation
-        self.is_180 = is_180
-        self.is_dome = is_dome
+        self.is_180 = True if mode in {'EQUI180','DOME'} else False
+        self.is_dome = True if mode == 'DOME' else False
         self.createdFiles = set()
         
         # Get initial camera and output information
@@ -50,7 +50,7 @@ class VRRenderer:
             bpy.context.scene.render.image_settings.stereo_3d_format.display_mode = 'TOPBOTTOM'
 
         self.direction_offsets = self.find_direction_offsets()
-        if is_180:
+        if self.is_180:
             self.camera_shift = {'top':[0.0, -0.25, self.side_resolution, self.side_resolution/2],\
                                  'bottom':[0.0, 0.25, self.side_resolution, self.side_resolution/2],\
                                  'left':[0.25, 0.0, self.side_resolution/2, self.side_resolution],\
@@ -179,7 +179,6 @@ class VRRenderer:
             uniform sampler2D cubeRightImage;
             uniform sampler2D cubeBottomImage;
             uniform sampler2D cubeTopImage;
-            uniform sampler2D cubeBackImage;
             uniform sampler2D cubeFrontImage;
 
             in vec2 vTexCoord;
@@ -207,22 +206,18 @@ class VRRenderer:
                 // Select the correct pixel
                 if ((abs(pt.x) >= abs(pt.y)) && (abs(pt.x) >= abs(pt.z))) {
                     if (pt.x <= 0.0) {
-                        fragColor = texture(cubeLeftImage, vec2(((-pt.z/pt.x)+1.0)/2.0,((-pt.y/pt.x)+1.0)/2.0));
+                        fragColor = texture(cubeLeftImage, vec2(((-pt.z/pt.x)),((-pt.y/pt.x)+1.0)/2.0));
                     } else {
-                        fragColor = texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0)/2.0,((pt.y/pt.x)+1.0)/2.0));
+                        fragColor = texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0),((pt.y/pt.x)+1.0)/2.0));
                     }
                 } else if (abs(pt.y) >= abs(pt.z)) {
                     if (pt.y <= 0.0) {
-                        fragColor = texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/2.0));
+                        fragColor = texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y))));
                     } else {
-                        fragColor = texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/2.0));
+                        fragColor = texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)));
                     }
                 } else {
-                    if (pt.z <= 0.0) {
-                        fragColor = texture(cubeBackImage, vec2(((pt.x/pt.z)+1.0)/2.0,((-pt.y/pt.z)+1.0)/2.0));
-                    } else {
-                        fragColor = texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
-                    }
+                    fragColor = texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
                 }
             }
         '''
@@ -617,70 +612,29 @@ class VRRenderer:
         return {'FINISHED'}
 
 
-class RenderImage360(Operator):
-    """Render a 360 degree image"""
+class RenderImage(Operator):
+    """Render the image"""
     
-    bl_idname = 'wl.render_360_image'
-    bl_label = "Render a 360 degree image"
-    
-    def execute(self, context):
-        
-        return VRRenderer(bpy.context.scene.render.use_multiview, False, False, False).render_and_save()
-
-
-class RenderVideo360(Operator):
-    """Render a 360 degree video"""
-    
-    bl_idname = 'wl.render_360_video'
-    bl_label = "Render a 360 degree video"
-    
-    def execute(self, context):
-
-        return VRRenderer(bpy.context.scene.render.use_multiview, True, False, False).render_and_save()
-
-
-class RenderImage180(Operator):
-    """Render a 180 degree image"""
-    
-    bl_idname = 'wl.render_180_image'
-    bl_label = "Render a 180 degree image"
-    
-    def execute(self, context):
-
-        return VRRenderer(bpy.context.scene.render.use_multiview, False, True, False).render_and_save()
-
-
-class RenderVideo180(Operator):
-    """Render a 180 degree video"""
-    
-    bl_idname = 'wl.render_180_video'
-    bl_label = "Render a 180 degree video"
-    
-    def execute(self, context):
-
-        return VRRenderer(bpy.context.scene.render.use_multiview, True, True, False).render_and_save()
-
-    
-class RenderDomeImage(Operator):
-    """Render a dome image"""
-    
-    bl_idname = 'wl.render_dome_image'
-    bl_label = "Render a dome image"
+    bl_idname = 'wl.render_image'
+    bl_label = "Render image"
     
     def execute(self, context):
         
-        return VRRenderer(bpy.context.scene.render.use_multiview, False, False, True).render_and_save()
+        mode = bpy.context.scene.renderModeEnum
+        return VRRenderer(bpy.context.scene.render.use_multiview, False, mode).render_and_save()
 
 
-class RenderDomeVideo(Operator):
-    """Render a dome video"""
+class RenderAnimation(Operator):
+    """Render out the animation"""
     
-    bl_idname = 'wl.render_dome_video'
-    bl_label = "Render a dome video"
+    bl_idname = 'wl.render_animation'
+    bl_label = "Render the animation"
     
     def execute(self, context):
         
-        return VRRenderer(bpy.context.scene.render.use_multiview, True, False, True).render_and_save()
+        mode = bpy.context.scene.renderModeEnum
+        return VRRenderer(bpy.context.scene.render.use_multiview, True, mode).render_and_save()
+
 
 
 class RenderToolsPanel(Panel):
@@ -696,33 +650,29 @@ class RenderToolsPanel(Panel):
         # Draw the buttons for each of the rendering operators
         layout = self.layout
         col = layout.column()
-        col.operator("wl.render_360_image", text="360 Image")
-        col.operator("wl.render_360_video", text="360 Video")
-        col.operator("wl.render_180_image", text="180 Image")
-        col.operator("wl.render_180_video", text="180 Video")
-        col.operator("wl.render_dome_image", text="Dome Image")
-        col.operator("wl.render_dome_video", text="Dome Video")
+        col.prop(context.scene, 'renderModeEnum')
+        col.operator("wl.render_image", text="Render Image")
+        col.operator("wl.render_animation", text="Render Animation")
 
 
 # Register all classes
 def register():
-    bpy.utils.register_class(RenderImage360)
-    bpy.utils.register_class(RenderVideo360)
-    bpy.utils.register_class(RenderImage180)
-    bpy.utils.register_class(RenderVideo180)
-    bpy.utils.register_class(RenderDomeImage)
-    bpy.utils.register_class(RenderDomeVideo)
+    bpy.types.Scene.renderModeEnum = bpy.props.EnumProperty(
+        items = [('EQUI180', '180 Equi', 'Renders in 180 degrees equirectangular projection'), 
+                 ('EQUI360', '360 Equi', 'Renders in 180 degrees equirectangular projection'),
+                 ('DOME', '180 Dome', 'Renders in 180 degrees dome projection')],
+        default='EQUI180',
+        name="Mode")
+    bpy.utils.register_class(RenderImage)
+    bpy.utils.register_class(RenderAnimation)
     bpy.utils.register_class(RenderToolsPanel)
+    
 
 
 # Unregister all classes
 def unregister():
-    bpy.utils.unregister_class(RenderImage360)
-    bpy.utils.unregister_class(RenderVideo360)
-    bpy.utils.unregister_class(RenderImage180)
-    bpy.utils.unregister_class(RenderVideo180)
-    bpy.utils.unregister_class(RenderDomeImage)
-    bpy.utils.unregister_class(RenderDomeVideo)
+    bpy.utils.unregister_class(RenderImage)
+    bpy.utils.unregister_class(RenderAnimation)
     bpy.utils.unregister_class(RenderToolsPanel)
 
 
