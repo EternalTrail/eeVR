@@ -27,6 +27,10 @@ class VRRenderer:
         self.is_dome = (mode == 'DOME')
         self.createdFiles = set()
         
+        # Set the image/folder name to the current time
+        self.start_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+        self.folder_name = "Render Result {}/".format(self.start_time)
+        
         # Get initial camera and output information
         self.camera_rotation = list(self.camera.rotation_euler)
         self.IPD = self.camera.data.stereo.interocular_distance
@@ -564,125 +568,153 @@ class VRRenderer:
         self.trans_constraint.target = None
         
         return image_list_1, image_list_2
-    
-    
+   
+   
     def render_and_save(self):
-        
+               
         # Set the render resolution dimensions to the maximum of the two input dimensions
         bpy.context.scene.render.resolution_x = self.side_resolution
         bpy.context.scene.render.resolution_y = self.side_resolution
         self.camera.data.shift_x = 0
-        self.camera.data.shift_y = 0 
-        
-        # Set the image/folder name to the current time
-        time_now = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-        
-        # Render the image or video
+        self.camera.data.shift_y = 0
+       
+       
+        frame_step = bpy.context.scene.frame_step
+       
+        # Render the images and return their names
+        imageList, imageList2 = self.render_images()
         if self.is_animation:
-            
-            # Find which frames need to be rendered
-            frame_start = bpy.context.scene.frame_start
-            frame_end = bpy.context.scene.frame_end
-            frame_step = bpy.context.scene.frame_step
-            bpy.context.scene.frame_set(frame_start)
-            
-            # Render and store every frame
-            i = 1
-            while bpy.context.scene.frame_current <= frame_end:
-                
-                # Render the images and return their names
-                imageList, imageList2 = self.render_images()
-                folder_name = "Render Result {}/".format(time_now)
-                image_name = "frame{:06d}.png".format(i)
-                
-                # Convert the rendered images to equirectangular projection image and save it to the disk
-                if self.is_stereo:
-                    imageResult1 = self.cubemap_to_equirectangular(imageList, "Render Left")
-                    imageResult2 = self.cubemap_to_equirectangular(imageList2, "Render Right")
-                    
-                    # If it doesn't already exist, create an image object to store the resulting render
-                    if not image_name in bpy.data.images.keys():
-                        imageResult = bpy.data.images.new(image_name, imageResult1.size[0],\
-                                                          2*imageResult1.size[1])
-                    imageResult = bpy.data.images[image_name]
-                    imageResult.scale(imageResult1.size[0], 2*imageResult1.size[1])
-                    imageResult.pixels = list(imageResult2.pixels) + list(imageResult1.pixels)
-                    bpy.data.images.remove(imageResult1)
-                    bpy.data.images.remove(imageResult2)
-                    
-                else:
-                    imageResult = self.cubemap_to_equirectangular(imageList, "RenderResult")
-                imageResult.save_render(self.path+folder_name+image_name)
-                bpy.data.images.remove(imageResult)
-                bpy.context.scene.frame_set(frame_start+i*frame_step)
-                i += 1
-                
+            image_name = "frame{:06d}.png".format(bpy.context.scene.frame_current)
         else:
-            
-            # Render the images and return their names
-            imageList, imageList2 = self.render_images()
-            image_name = "RenderResult"
-            
-            # Convert the rendered images to equirectangular projection image and save it to the disk
-            if self.is_stereo:
-                imageResult1 = self.cubemap_to_equirectangular(imageList, "Render Left")
-                imageResult2 = self.cubemap_to_equirectangular(imageList2, "Render Right")
-                
-                # If it doesn't already exist, create an image object to store the resulting render
-                if not image_name in bpy.data.images.keys():
-                    imageResult = bpy.data.images.new(image_name, imageResult1.size[0],\
-                                                      2*imageResult1.size[1])
-                imageResult = bpy.data.images[image_name]
-                imageResult.scale(imageResult1.size[0], 2*imageResult1.size[1])
-                imageResult.pixels = list(imageResult2.pixels) + list(imageResult1.pixels)
-                bpy.data.images.remove(imageResult1)
-                bpy.data.images.remove(imageResult2)
-                
-            else:
-                imageResult = self.cubemap_to_equirectangular(imageList, "RenderResult")
-            imageResult.save_render(self.path+"Render Result {}.png".format(time_now))
-        self.clean_up()
+            image_name = "Render Result {}.png".format(self.start_time)
+       
+        # Convert the rendered images to equirectangular projection image and save it to the disk
+        if self.is_stereo:
+            imageResult1 = self.cubemap_to_equirectangular(imageList, "Render Left")
+            imageResult2 = self.cubemap_to_equirectangular(imageList2, "Render Right")
+           
+            # If it doesn't already exist, create an image object to store the resulting render
+            if not image_name in bpy.data.images.keys():
+                imageResult = bpy.data.images.new(image_name, imageResult1.size[0],\
+                                                  2*imageResult1.size[1])
+            imageResult = bpy.data.images[image_name]
+            imageResult.scale(imageResult1.size[0], 2*imageResult1.size[1])
+            imageResult.pixels = list(imageResult2.pixels) + list(imageResult1.pixels)
+            bpy.data.images.remove(imageResult1)
+            bpy.data.images.remove(imageResult2)
+           
+        else:
+            imageResult = self.cubemap_to_equirectangular(imageList, "RenderResult")
         
+        if self.is_animation:
+            imageResult.save_render(self.path+self.folder_name+image_name)
+            bpy.context.scene.frame_set(bpy.context.scene.frame_current+frame_step)
+        else:
+            imageResult.save_render(self.path+image_name)
+        
+        bpy.data.images.remove(imageResult)
+ 
+ 
+class VRRendererCancel(Operator):
+    """Render out the animation"""
+   
+    bl_idname = 'wl.render_cancel'
+    bl_label = "Cancel the render"
+ 
+    def execute(self, context):
+        context.scene.cancelVRRenderer = True
         return {'FINISHED'}
 
 
 class RenderImage(Operator):
-    """Render the image"""
-    
+    """Render out the animation"""
+   
     bl_idname = 'wl.render_image'
-    bl_label = "Render image"
+    bl_label = "Render a single frame"
     
     def execute(self, context):
-        
+        print("VRRenderer: execute")
+       
         mode = bpy.context.scene.renderModeEnum
         FOV = bpy.context.scene.renderFOV
-        return VRRenderer(bpy.context.scene.render.use_multiview, False, mode, FOV).render_and_save()
-
+        renderer = VRRenderer(bpy.context.scene.render.use_multiview, False, mode, FOV)
+        renderer.render_and_save() 
+        renderer.clean_up() 
+        
+        return {'FINISHED'}
+    
 
 class RenderAnimation(Operator):
     """Render out the animation"""
-    
+   
     bl_idname = 'wl.render_animation'
     bl_label = "Render the animation"
-    
+   
+    def __del__(self):
+        print("VRRenderer: end")
+   
+    def modal(self, context, event):
+        if event.type in {'ESC'}:
+            self.cancel(context)
+            return {'CANCELLED'}
+ 
+        if event.type == 'TIMER':
+            wm = context.window_manager
+            wm.event_timer_remove(self._timer)
+           
+            if context.scene.cancelVRRenderer:
+                self.cancel(context)
+                return {'CANCELLED'}
+           
+            if bpy.context.scene.frame_current <= self.frame_end:
+                print("VRRenderer: Rendering frame {}".format(bpy.context.scene.frame_current))
+                self._renderer.render_and_save()
+                self._timer = wm.event_timer_add(0.1, window=context.window)
+            else:
+                self.clean(context)
+                return {'FINISHED'}
+ 
+        return {'PASS_THROUGH'}
+ 
     def execute(self, context):
-        
+        print("VRRenderer: execute")
+ 
+        context.scene.cancelVRRenderer = False
+       
         mode = bpy.context.scene.renderModeEnum
         FOV = bpy.context.scene.renderFOV
-        return VRRenderer(bpy.context.scene.render.use_multiview, True, mode, FOV).render_and_save()
-
-
-
+        self._renderer = VRRenderer(bpy.context.scene.render.use_multiview, True, mode, FOV)
+ 
+        self.frame_end = bpy.context.scene.frame_end
+        frame_start = bpy.context.scene.frame_start
+        bpy.context.scene.frame_set(frame_start)
+ 
+        wm = context.window_manager
+        self._timer = wm.event_timer_add(5, window=context.window)
+        wm.modal_handler_add(self)        
+        return {'RUNNING_MODAL'}
+ 
+    def cancel(self, context):
+        print("VRRenderer: cancel")
+        self.clean(context)
+       
+    def clean(self, context):
+        self._renderer.clean_up()
+        context.scene.cancelVRRenderer = True
+       
+ 
+ 
 class RenderToolsPanel(Panel):
     """Tools panel for VR rendering"""
-    
-    bl_idname = "RENDER_TOOLS_PT_render_tools_panel"
+   
+    bl_idname = "RENDER_TOOLS_PT_render_tools_panel2"
     bl_label = "Render Tools"
+    bl_category = "VRRenderer"
     bl_space_type = 'VIEW_3D'
-    bl_region_type = 'TOOLS'
-
+    bl_region_type = 'UI'
+ 
     def draw(self, context):
-        
+       
         # Draw the buttons for each of the rendering operators
         layout = self.layout
         col = layout.column()
@@ -690,8 +722,11 @@ class RenderToolsPanel(Panel):
         col.prop(context.scene, 'renderFOV')
         col.operator("wl.render_image", text="Render Image")
         col.operator("wl.render_animation", text="Render Animation")
-
-
+        if not context.scene.cancelVRRenderer:
+            col.operator("wl.render_cancel", text="Cancel")
+            col.label(text="Rendering frame {}".format(bpy.context.scene.frame_current))
+ 
+ 
 # Register all classes
 def register():
     bpy.types.Scene.renderModeEnum = bpy.props.EnumProperty(
@@ -701,12 +736,15 @@ def register():
         name="Mode")
     bpy.types.Scene.renderFOV = bpy.props.FloatProperty(180.0,default=180.0, name="FOV", min=180, max=360,
                                 description="Field of view in degrees")
+    bpy.types.Scene.cancelVRRenderer = bpy.props.BoolProperty(name="Cancel", default=True)
     bpy.utils.register_class(RenderImage)
     bpy.utils.register_class(RenderAnimation)
     bpy.utils.register_class(RenderToolsPanel)
-    
-
-
+    bpy.utils.register_class(VRRendererCancel)
+   
+   
+ 
+ 
 # Unregister all classes
 def unregister():
     del bpy.types.Scene.renderModeEnum
@@ -714,8 +752,9 @@ def unregister():
     bpy.utils.unregister_class(RenderImage)
     bpy.utils.unregister_class(RenderAnimation)
     bpy.utils.unregister_class(RenderToolsPanel)
-
-
+    bpy.utils.unregister_class(VRRendererCancel)
+ 
+ 
 # If the script is not an addon when it is run, register the classes
 if __name__=="__main__":
     register()
