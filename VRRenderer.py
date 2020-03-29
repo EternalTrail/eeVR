@@ -3,6 +3,7 @@ import os
 import gpu
 import bgl
 import mathutils
+import numpy as np
 from bpy.types import Operator, Panel
 from math import sin, cos, pi
 from datetime import datetime
@@ -598,8 +599,14 @@ class VRRenderer:
                 imageResult = bpy.data.images.new(image_name, imageResult1.size[0],\
                                                   2*imageResult1.size[1])
             imageResult = bpy.data.images[image_name]
-            imageResult.scale(imageResult1.size[0], 2*imageResult1.size[1])
-            imageResult.pixels = list(imageResult2.pixels) + list(imageResult1.pixels)
+            if self.stereo_mode == 'SIDEBYSIDE':
+                imageResult.scale(2*imageResult1.size[0], imageResult1.size[1])
+                img2arr = np.reshape(np.array(imageResult2.pixels),(imageResult2.size[1], 4*imageResult2.size[0]))
+                img1arr = np.reshape(np.array(imageResult1.pixels),(imageResult1.size[1], 4*imageResult1.size[0]))
+                imageResult.pixels = list(np.concatenate((img2arr, img1arr),axis=1).flatten())
+            else:
+                imageResult.scale(imageResult1.size[0], 2*imageResult1.size[1])
+                imageResult.pixels = list(imageResult2.pixels) + list(imageResult1.pixels)
             bpy.data.images.remove(imageResult1)
             bpy.data.images.remove(imageResult2)
            
