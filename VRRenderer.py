@@ -2,6 +2,7 @@ import bpy
 import os
 import gpu
 import bgl
+import mathutils
 from bpy.types import Operator, Panel
 from math import sin, cos, pi
 from datetime import datetime
@@ -390,24 +391,28 @@ class VRRenderer:
     def find_direction_offsets(self):
         
         # Calculate the pointing directions of the camera for each face of the cube
-        self.camera_rotation = list(self.camera.rotation_euler)
-        rotation = self.camera_rotation
+        # Using euler.rotate_axis() to handle, notice that rotation should be done on copies
+        eul = self.camera.rotation_euler.copy()
         direction_offsets = {}
-        direction_offsets['front'] = [rotation[0], 0,\
-                                      rotation[2]]
-        direction_offsets['back'] = [pi-rotation[0], 0,\
-                                     pi+rotation[2]]
-        direction_offsets['top'] = [rotation[0]+pi/2, 0,\
-                                   rotation[2]]
-        direction_offsets['bottom'] = [rotation[0]-pi/2, 0,\
-                                     rotation[2]]
-        direction_offsets['left'] = [pi/2,\
-                                     pi/2-rotation[0],\
-                                     rotation[2]+pi/2]
-        direction_offsets['right'] = [pi/2,\
-                                      rotation[0]-pi/2,\
-                                      rotation[2]-pi/2]
-        
+        #front
+        direction_offsets['front'] = list(eul)
+        #back
+        eul.rotate_axis('Y', pi)
+        direction_offsets['back'] = list(eul)
+        #top
+        eul = self.camera.rotation_euler.copy()
+        eul.rotate_axis('X', pi/2)
+        direction_offsets['top'] = list(eul)
+        #bottom
+        eul.rotate_axis('X', pi)
+        direction_offsets['bottom'] = list(eul)
+        #left
+        eul = self.camera.rotation_euler.copy()
+        eul.rotate_axis('Y', pi/2)
+        direction_offsets['left'] = list(eul)
+        #right
+        eul.rotate_axis('Y', pi)
+        direction_offsets['right'] = list(eul)
         return direction_offsets
     
     
