@@ -35,6 +35,17 @@ class VRRenderer:
         self.stereo_type = self.camera.data.stereo.convergence_mode
         self.stereo_pivot = self.camera.data.stereo.pivot
         
+        # Create an empty to be used to control the camera
+        if 'eeVR_CAMERA_EMPTY' in bpy.data.objects.keys():
+            self.camera_empty = bpy.data.objects['eeVR_CAMERA_EMPTY']
+        else:
+            self.camera_empty = bpy.data.objects.new('eeVR_CAMERA_EMPTY', None)
+        
+        # Create a copy transforms constraint for the camera
+        self.trans_constraint = self.camera.constraints.new('COPY_TRANSFORMS')
+        
+        #self.camera.rotation_euler
+        
         # Set camera variables for proper result
         self.camera.data.type = 'PANO'
         self.camera.data.stereo.convergence_mode = 'PARALLEL'
@@ -419,7 +430,7 @@ class VRRenderer:
     def set_camera_direction(self, direction):
         
         # Set the camera to the required postion    
-        self.camera.rotation_euler = self.direction_offsets[direction]
+        self.camera_empty.rotation_euler = self.direction_offsets[direction]
         
         if self.no_back_image:
             self.camera.data.shift_x = self.camera_shift[direction][0]
@@ -431,6 +442,7 @@ class VRRenderer:
     def clean_up(self):
         
         # Reset all the variables that were changed
+        self.camera.constraints.remove(self.trans_constraint)
         self.camera.data.type = self.camera_type
         self.camera.data.stereo.convergence_mode = self.stereo_type
         self.camera.data.stereo.pivot = self.stereo_pivot
@@ -463,16 +475,16 @@ class VRRenderer:
                 bpy.data.images.remove(bpy.data.images[imageR])
             
             bpy.context.scene.render.use_multiview = False
-            tmp_loc = list(self.camera.location)
+            tmp_loc = list(self.camera_empty.location)
             camera_angle = self.direction_offsets['front'][2]
-            self.camera.location = [tmp_loc[0]+(0.5*self.IPD*cos(camera_angle)),\
+            self.camera_empty.location = [tmp_loc[0]+(0.5*self.IPD*cos(camera_angle)),\
                                     tmp_loc[1]+(0.5*self.IPD*sin(camera_angle)),\
                                     tmp_loc[2]]
             bpy.data.scenes['Scene'].render.filepath = self.path + imageL
             bpy.ops.render.render(write_still=True)
             renderedImageL = bpy.data.images.load(self.path + imageL)
             
-            self.camera.location = [tmp_loc[0]-(0.5*self.IPD*cos(camera_angle)),\
+            self.camera_empty.location = [tmp_loc[0]-(0.5*self.IPD*cos(camera_angle)),\
                                     tmp_loc[1]-(0.5*self.IPD*sin(camera_angle)),\
                                     tmp_loc[2]]
             bpy.data.scenes['Scene'].render.filepath = self.path + imageR
@@ -480,7 +492,7 @@ class VRRenderer:
             renderedImageR = bpy.data.images.load(self.path + imageR)
             bpy.context.scene.render.use_multiview = True
             self.createdFiles.update({self.path+imageR, self.path+imageL})
-            self.camera.location = tmp_loc
+            self.camera_empty.location = tmp_loc
         
         elif self.is_stereo:
             bpy.ops.render.render(write_still=True)
@@ -536,6 +548,9 @@ class VRRenderer:
         image_list_2 = []
         
         self.direction_offsets = self.find_direction_offsets()
+        self.camera_empty.location = self.camera.location
+        self.camera_empty.rotation_euler = self.camera.rotation_euler
+        self.trans_constraint.target = self.camera_empty
         for direction in directions:
             if direction == 'back' and self.no_back_image:
                 continue
@@ -546,6 +561,7 @@ class VRRenderer:
                 image_list_2.append(img2)
         
         self.set_camera_direction('front')
+        self.trans_constraint.target = None
         
         return image_list_1, image_list_2
     
