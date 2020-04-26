@@ -1,9 +1,9 @@
 # eeVR
-Blender script to render 360° and 180° images and videos in eevee engine with support for stereoscopic rendering.
+Blender addon to render 360° and 180° images and videos in eevee engine with support for stereoscopic rendering.
 
 ## Getting Started
 
-You will need to get [**Blender 2.8**](https://www.blender.org), install it, download the script **VRRenderer.py**, open the script in Blender and run it (and press the register checkbox if you want it to persist for that blender file). Then a tool panel will appear in the 3D Viewport with mode selection, FOV value adjustment, and buttons for rendering stills and animations. 
+You will need to get [**Blender 2.8X**](https://www.blender.org), install it, download the script **VRRenderer.py**, load the addon into Blender by installing the VRRenderer.py file in Blender Preferences > Add-ons > Install, search for "eeVR" under the Testing tab and click the checkbox to enable it. A tool panel will appear in the 3D Viewport with mode selection, FOV value adjustment, and buttons for rendering stills and animations. 
 
 **Beware this is still in development so I suggest backing up whatever project you're using this on before you begin rendering.**
 
