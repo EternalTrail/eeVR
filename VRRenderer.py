@@ -9,6 +9,166 @@ from math import sin, cos, pi
 from datetime import datetime
 from gpu_extras.batch import batch_for_shader
 
+
+frag_shaders = {
+# Define the fragment shader for the 360 degree conversion
+"EQUI360":'''
+    #define PI 3.1415926535897932384626
+    
+    // Input cubemap textures
+    uniform sampler2D cubeLeftImage;
+    uniform sampler2D cubeRightImage;
+    uniform sampler2D cubeBottomImage;
+    uniform sampler2D cubeTopImage;
+    uniform sampler2D cubeBackImage;
+    uniform sampler2D cubeFrontImage;
+
+    in vec2 vTexCoord;
+
+    out vec4 fragColor;
+
+    void main() {
+    
+        // Calculate the pointing angle
+        float azimuth = vTexCoord.x * PI;
+        float elevation = vTexCoord.y * PI / 2.0;
+        
+        // Calculate the pointing vector
+        vec3 pt;
+        pt.x = cos(elevation) * sin(azimuth);
+        pt.y = sin(elevation);
+        pt.z = cos(elevation) * cos(azimuth);
+        
+        // Select the correct pixel
+        if ((abs(pt.x) >= abs(pt.y)) && (abs(pt.x) >= abs(pt.z))) {
+            if (pt.x <= 0.0) {
+                fragColor = texture(cubeLeftImage, vec2(((-pt.z/pt.x)+1.0)/2.0,((-pt.y/pt.x)+1.0)/2.0));
+            } else {
+                fragColor = texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0)/2.0,((pt.y/pt.x)+1.0)/2.0));
+            }
+        } else if (abs(pt.y) >= abs(pt.z)) {
+            if (pt.y <= 0.0) {
+                fragColor = texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/2.0));
+            } else {
+                fragColor = texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/2.0));
+            }
+        } else {
+            if (pt.z <= 0.0) {
+                fragColor = texture(cubeBackImage, vec2(((pt.x/pt.z)+1.0)/2.0,((-pt.y/pt.z)+1.0)/2.0));
+            } else {
+                fragColor = texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
+            }
+        }
+    }
+''',
+# Define the fragment shader for the 180 degree conversion
+"EQUI180": '''
+    #define PI 3.1415926535897932384626
+    
+    // Input cubemap textures
+    uniform sampler2D cubeLeftImage;
+    uniform sampler2D cubeRightImage;
+    uniform sampler2D cubeBottomImage;
+    uniform sampler2D cubeTopImage;
+    uniform sampler2D cubeFrontImage;
+
+    in vec2 vTexCoord;
+
+    out vec4 fragColor;
+
+    void main() {{
+    
+        // Calculate the pointing angle
+        float fovd = {0};
+        float fovfrac = fovd/360.0;
+        float sidefrac = (fovd-90.0)/180;
+        float azimuth = vTexCoord.x * PI * fovfrac;
+        float elevation = vTexCoord.y * PI / 2.0;
+        
+        // Calculate the pointing vector
+        vec3 pt;
+        pt.x = cos(elevation) * sin(azimuth);
+        pt.y = sin(elevation);
+        pt.z = cos(elevation) * cos(azimuth);
+        
+        // Select the correct pixel
+        if ((abs(pt.x) >= abs(pt.y)) && (abs(pt.x) >= abs(pt.z))) {{
+            if (pt.x <= 0.0) {{
+                fragColor = texture(cubeLeftImage, vec2((((-pt.z/pt.x))+(2.0*sidefrac-1.0))/(2.0*sidefrac),((-pt.y/pt.x)+1.0)/2.0));
+            }} else {{
+                fragColor = texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0)/(2.0*sidefrac),((pt.y/pt.x)+1.0)/2.0));
+            }}
+        }} else if (abs(pt.y) >= abs(pt.z)) {{
+            if (pt.y <= 0.0) {{
+                fragColor = texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+(2.0*sidefrac-1.0))/(2.0*sidefrac)));
+            }} else {{
+                fragColor = texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/(2.0*sidefrac)));
+            }}
+        }} else {{
+            fragColor = texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
+        }}
+    }}
+''',
+# Define the shader for the dome projection
+"DOME": '''
+    #define PI 3.1415926535897932384626
+    
+    // Input cubemap textures
+    uniform sampler2D cubeLeftImage;
+    uniform sampler2D cubeRightImage;
+    uniform sampler2D cubeBottomImage;
+    uniform sampler2D cubeTopImage;
+    uniform sampler2D cubeFrontImage;
+    uniform sampler2D cubeBackImage;
+
+    in vec2 vTexCoord;
+
+    out vec4 fragColor;
+
+    void main() {{
+
+        float fovd = {0};
+        float fovfrac = fovd/360.0;
+        float sidefrac = (fovd-90.0)/180;
+        float hfov = fovfrac*PI;
+        vec2 d = vTexCoord.xy;
+
+        float r = length( d );
+        if( r > 1.0 ) {{
+            fragColor = vec4(0.0, 0.0, 0.0, 1.0);
+            return;
+        }}
+        
+        vec2 dunit = normalize( d );
+        float phi = r * hfov;
+        vec3 pt = vec3( 1.0, 1.0, 1.0 );
+        pt.xy = dunit * sin( phi );
+        pt.z = cos( phi );  // Select the correct pixel
+        
+        // Select the correct pixel
+        if ((abs(pt.x) >= abs(pt.y)) && (abs(pt.x) >= abs(pt.z))) {{
+            if (pt.x <= 0.0) {{
+                fragColor = texture(cubeLeftImage, vec2((((-pt.z/pt.x))+(2.0*sidefrac-1.0))/(2.0*sidefrac),((-pt.y/pt.x)+1.0)/2.0));
+            }} else {{
+                fragColor = texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0)/(2.0*sidefrac),((pt.y/pt.x)+1.0)/2.0));
+            }}
+        }} else if (abs(pt.y) >= abs(pt.z)) {{
+            if (pt.y <= 0.0) {{
+                fragColor = texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+(2.0*sidefrac-1.0))/(2.0*sidefrac)));
+            }} else {{
+                fragColor = texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/(2.0*sidefrac)));
+            }}
+        }} else {{
+            if (pt.z <= 0.0) {{
+                fragColor = texture(cubeBackImage, vec2(((pt.x/pt.z)+1.0)/2.0,((-pt.y/pt.z)+1.0)/2.0));
+            }} else {{
+                fragColor = texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
+            }}
+        }}
+    }}
+'''
+}
+
 class VRRenderer:
     
     def __init__(self, is_stereo = False, is_animation = False, mode = 'EQUI', FOV = 180):
@@ -24,9 +184,20 @@ class VRRenderer:
         self.is_animation = is_animation
         self.FOV = FOV
         self.no_back_image = (self.FOV <= 270)
-        self.no_side_images = (self.FOV <= 90) # TODO - Not implemented yet
+        self.no_side_images = (self.FOV <= 90) # TODO - Not implemented yet, probably not needed
         self.is_dome = (mode == 'DOME')
         self.createdFiles = set()
+        
+        # Select the correct shader
+        if self.is_dome:
+            self.frag_shader = frag_shaders["DOME"]
+        else:
+            if self.no_back_image:
+                self.frag_shader = frag_shaders["EQUI180"]
+            else:
+                self.frag_shader = frag_shaders["EQUI360"]
+        
+        self.frag_shader = self.frag_shader.format(self.FOV)
         
         # Set the image/folder name to the current time
         self.start_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
@@ -41,9 +212,9 @@ class VRRenderer:
         self.stereo_pivot = self.camera.data.stereo.pivot
         
         # Create an empty to be used to control the camera
-        if 'eeVR_CAMERA_EMPTY' in bpy.data.objects.keys():
+        try:
             self.camera_empty = bpy.data.objects['eeVR_CAMERA_EMPTY']
-        else:
+        except KeyError:
             self.camera_empty = bpy.data.objects.new('eeVR_CAMERA_EMPTY', None)
         
         # Create a copy transforms constraint for the camera
@@ -93,165 +264,6 @@ class VRRenderer:
             }
         '''
         
-        # Define the fragment shader for the 360 degree conversion
-        fragment_shader_360 = '''
-            #define PI 3.1415926535897932384626
-            
-            // Input cubemap textures
-            uniform sampler2D cubeLeftImage;
-            uniform sampler2D cubeRightImage;
-            uniform sampler2D cubeBottomImage;
-            uniform sampler2D cubeTopImage;
-            uniform sampler2D cubeBackImage;
-            uniform sampler2D cubeFrontImage;
-
-            in vec2 vTexCoord;
-
-            out vec4 fragColor;
-
-            void main() {
-            
-                // Calculate the pointing angle
-                float azimuth = vTexCoord.x * PI;
-                float elevation = vTexCoord.y * PI / 2.0;
-                
-                // Calculate the pointing vector
-                vec3 pt;
-                pt.x = cos(elevation) * sin(azimuth);
-                pt.y = sin(elevation);
-                pt.z = cos(elevation) * cos(azimuth);
-                
-                // Select the correct pixel
-                if ((abs(pt.x) >= abs(pt.y)) && (abs(pt.x) >= abs(pt.z))) {
-                    if (pt.x <= 0.0) {
-                        fragColor = texture(cubeLeftImage, vec2(((-pt.z/pt.x)+1.0)/2.0,((-pt.y/pt.x)+1.0)/2.0));
-                    } else {
-                        fragColor = texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0)/2.0,((pt.y/pt.x)+1.0)/2.0));
-                    }
-                } else if (abs(pt.y) >= abs(pt.z)) {
-                    if (pt.y <= 0.0) {
-                        fragColor = texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/2.0));
-                    } else {
-                        fragColor = texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/2.0));
-                    }
-                } else {
-                    if (pt.z <= 0.0) {
-                        fragColor = texture(cubeBackImage, vec2(((pt.x/pt.z)+1.0)/2.0,((-pt.y/pt.z)+1.0)/2.0));
-                    } else {
-                        fragColor = texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
-                    }
-                }
-            }
-        '''
-        
-        # Define the fragment shader for the 180 degree conversion
-        fragment_shader_180 = '''
-            #define PI 3.1415926535897932384626
-            
-            // Input cubemap textures
-            uniform sampler2D cubeLeftImage;
-            uniform sampler2D cubeRightImage;
-            uniform sampler2D cubeBottomImage;
-            uniform sampler2D cubeTopImage;
-            uniform sampler2D cubeFrontImage;
-
-            in vec2 vTexCoord;
-
-            out vec4 fragColor;
-
-            void main() {{
-            
-                // Calculate the pointing angle
-                float fovd = {0};
-                float fovfrac = fovd/360.0;
-                float sidefrac = (fovd-90.0)/180;
-                float azimuth = vTexCoord.x * PI * fovfrac;
-                float elevation = vTexCoord.y * PI / 2.0;
-                
-                // Calculate the pointing vector
-                vec3 pt;
-                pt.x = cos(elevation) * sin(azimuth);
-                pt.y = sin(elevation);
-                pt.z = cos(elevation) * cos(azimuth);
-                
-                // Select the correct pixel
-                if ((abs(pt.x) >= abs(pt.y)) && (abs(pt.x) >= abs(pt.z))) {{
-                    if (pt.x <= 0.0) {{
-                        fragColor = texture(cubeLeftImage, vec2((((-pt.z/pt.x))+(2.0*sidefrac-1.0))/(2.0*sidefrac),((-pt.y/pt.x)+1.0)/2.0));
-                    }} else {{
-                        fragColor = texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0)/(2.0*sidefrac),((pt.y/pt.x)+1.0)/2.0));
-                    }}
-                }} else if (abs(pt.y) >= abs(pt.z)) {{
-                    if (pt.y <= 0.0) {{
-                        fragColor = texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+(2.0*sidefrac-1.0))/(2.0*sidefrac)));
-                    }} else {{
-                        fragColor = texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/(2.0*sidefrac)));
-                    }}
-                }} else {{
-                    fragColor = texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
-                }}
-            }}
-        '''.format(self.FOV)
-
-        # Define the fragment shader for the dome conversion
-        fragment_shader_dome = '''
-            #define PI 3.1415926535897932384626
-            
-            // Input cubemap textures
-            uniform sampler2D cubeLeftImage;
-            uniform sampler2D cubeRightImage;
-            uniform sampler2D cubeBottomImage;
-            uniform sampler2D cubeTopImage;
-            uniform sampler2D cubeFrontImage;
-            uniform sampler2D cubeBackImage;
-
-            in vec2 vTexCoord;
-
-            out vec4 fragColor;
-
-            void main() {{
-
-                float fovd = {0};
-                float fovfrac = fovd/360.0;
-                float sidefrac = (fovd-90.0)/180;
-                float hfov = fovfrac*PI;
-                vec2 d = vTexCoord.xy;
-
-                float r = length( d );
-                if( r > 1.0 ) {{
-                    fragColor = vec4(0.0, 0.0, 0.0, 1.0);
-                    return;
-                }}
-                
-                vec2 dunit = normalize( d );
-                float phi = r * hfov;
-                vec3 pt = vec3( 1.0, 1.0, 1.0 );
-                pt.xy = dunit * sin( phi );
-                pt.z = cos( phi );  // Select the correct pixel
-                
-                // Select the correct pixel
-                if ((abs(pt.x) >= abs(pt.y)) && (abs(pt.x) >= abs(pt.z))) {{
-                    if (pt.x <= 0.0) {{
-                        fragColor = texture(cubeLeftImage, vec2((((-pt.z/pt.x))+(2.0*sidefrac-1.0))/(2.0*sidefrac),((-pt.y/pt.x)+1.0)/2.0));
-                    }} else {{
-                        fragColor = texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0)/(2.0*sidefrac),((pt.y/pt.x)+1.0)/2.0));
-                    }}
-                }} else if (abs(pt.y) >= abs(pt.z)) {{
-                    if (pt.y <= 0.0) {{
-                        fragColor = texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+(2.0*sidefrac-1.0))/(2.0*sidefrac)));
-                    }} else {{
-                        fragColor = texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/(2.0*sidefrac)));
-                    }}
-                }} else {{
-                    if (pt.z <= 0.0) {{
-                        fragColor = texture(cubeBackImage, vec2(((pt.x/pt.z)+1.0)/2.0,((-pt.y/pt.z)+1.0)/2.0));
-                    }} else {{
-                        fragColor = texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
-                    }}
-                }}
-            }}
-        '''.format(self.FOV)
-        
         # Generate the OpenGL shader
         pos = [(-1.0, -1.0, -1.0),  # left,  bottom, back
                (-1.0,  1.0, -1.0),  # left,  top,    back
@@ -262,43 +274,17 @@ class VRRenderer:
                   (1.0, -1.0),   # right, bottom
                   (1.0,  1.0)]   # right, top
         vertexIndices = [(0, 3, 1),(3, 0, 2)]
-        if self.is_dome:
-            shader = gpu.types.GPUShader(vertex_shader, fragment_shader_dome)
-        else:
-            if self.no_back_image:
-                shader = gpu.types.GPUShader(vertex_shader, fragment_shader_180)
-            else:
-                shader = gpu.types.GPUShader(vertex_shader, fragment_shader_360)
+        shader = gpu.types.GPUShader(vertex_shader, self.frag_shader)
+        
         batch = batch_for_shader(shader, 'TRIS', {"aVertexPosition": pos,\
                                                   "aVertexTextureCoord": coords},\
                                                   indices=vertexIndices)
         
         # Change the color space of all of the images to Linear
         # and load them into OpenGL textures
-        imageLeft = imageList[0]
-        imageLeft.colorspace_settings.name='Linear'
-        imageLeft.gl_load()
-
-        imageRight = imageList[1]
-        imageRight.colorspace_settings.name='Linear'
-        imageRight.gl_load()
-
-        imageBottom = imageList[2]
-        imageBottom.colorspace_settings.name='Linear'
-        imageBottom.gl_load()
-
-        imageTop = imageList[3]
-        imageTop.colorspace_settings.name='Linear'
-        imageTop.gl_load()
-
-        imageFront = imageList[4]
-        imageFront.colorspace_settings.name='Linear'
-        imageFront.gl_load()
-        
-        if not self.no_back_image:
-            imageBack = imageList[5]
-            imageBack.colorspace_settings.name='Linear'
-            imageBack.gl_load()
+        for image in imageList:
+            image.colorspace_settings.name='Linear'
+            image.gl_load()
         
         # set the size of the final image
         width = self.image_size[0]
@@ -312,77 +298,35 @@ class VRRenderer:
 
             shader.bind()
             
-            # Bind all of the cubemap textures and enable correct filtering and wrapping
-            # to prevent seams
-            bgl.glActiveTexture(bgl.GL_TEXTURE0)
-            bgl.glBindTexture(bgl.GL_TEXTURE_2D, imageLeft.bindcode)
-            bgl.glTexParameterf(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_MIN_FILTER, bgl.GL_LINEAR);
-            bgl.glTexParameterf(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_MAG_FILTER, bgl.GL_LINEAR);
-            bgl.glTexParameteri(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_WRAP_S, bgl.GL_CLAMP_TO_EDGE)
-            bgl.glTexParameteri(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_WRAP_T, bgl.GL_CLAMP_TO_EDGE)
-            shader.uniform_int("cubeLeftImage", 0)
-            
-            bgl.glActiveTexture(bgl.GL_TEXTURE1)
-            bgl.glBindTexture(bgl.GL_TEXTURE_2D, imageRight.bindcode)
-            bgl.glTexParameterf(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_MIN_FILTER, bgl.GL_LINEAR);
-            bgl.glTexParameterf(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_MAG_FILTER, bgl.GL_LINEAR);
-            bgl.glTexParameteri(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_WRAP_S, bgl.GL_CLAMP_TO_EDGE)
-            bgl.glTexParameteri(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_WRAP_T, bgl.GL_CLAMP_TO_EDGE)
-            shader.uniform_int("cubeRightImage", 1)
-            
-            bgl.glActiveTexture(bgl.GL_TEXTURE2)
-            bgl.glBindTexture(bgl.GL_TEXTURE_2D, imageBottom.bindcode)
-            bgl.glTexParameterf(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_MIN_FILTER, bgl.GL_LINEAR);
-            bgl.glTexParameterf(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_MAG_FILTER, bgl.GL_LINEAR);
-            bgl.glTexParameteri(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_WRAP_S, bgl.GL_CLAMP_TO_EDGE)
-            bgl.glTexParameteri(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_WRAP_T, bgl.GL_CLAMP_TO_EDGE)
-            shader.uniform_int("cubeBottomImage", 2)
-            
-            bgl.glActiveTexture(bgl.GL_TEXTURE3)
-            bgl.glBindTexture(bgl.GL_TEXTURE_2D, imageTop.bindcode)
-            bgl.glTexParameterf(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_MIN_FILTER, bgl.GL_LINEAR);
-            bgl.glTexParameterf(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_MAG_FILTER, bgl.GL_LINEAR);
-            bgl.glTexParameteri(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_WRAP_S, bgl.GL_CLAMP_TO_EDGE)
-            bgl.glTexParameteri(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_WRAP_T, bgl.GL_CLAMP_TO_EDGE)
-            shader.uniform_int("cubeTopImage", 3)
-            
-            bgl.glActiveTexture(bgl.GL_TEXTURE4)
-            bgl.glBindTexture(bgl.GL_TEXTURE_2D, imageFront.bindcode)
-            bgl.glTexParameterf(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_MIN_FILTER, bgl.GL_LINEAR);
-            bgl.glTexParameterf(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_MAG_FILTER, bgl.GL_LINEAR);
-            bgl.glTexParameteri(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_WRAP_S, bgl.GL_CLAMP_TO_EDGE)
-            bgl.glTexParameteri(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_WRAP_T, bgl.GL_CLAMP_TO_EDGE)
-            shader.uniform_int("cubeFrontImage", 4)
-            
-            if not self.no_back_image:
-                bgl.glActiveTexture(bgl.GL_TEXTURE5)
-                bgl.glBindTexture(bgl.GL_TEXTURE_2D, imageBack.bindcode)
-                bgl.glTexParameterf(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_MIN_FILTER, bgl.GL_LINEAR );
-                bgl.glTexParameterf(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_MAG_FILTER, bgl.GL_LINEAR );
+            def bind_and_filter(tex, bindcode, image=None, imageNum=None):
+                bgl.glActiveTexture(tex)
+                bgl.glBindTexture(bgl.GL_TEXTURE_2D, bindcode)
+                bgl.glTexParameterf(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_MIN_FILTER, bgl.GL_LINEAR)
+                bgl.glTexParameterf(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_MAG_FILTER, bgl.GL_LINEAR)
                 bgl.glTexParameteri(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_WRAP_S, bgl.GL_CLAMP_TO_EDGE)
                 bgl.glTexParameteri(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_WRAP_T, bgl.GL_CLAMP_TO_EDGE)
-                shader.uniform_int("cubeBackImage", 5)
+                if image!=None and imageNum!=None:
+                    shader.uniform_int(image, imageNum)
             
+            # Bind all of the cubemap textures and enable correct filtering and wrapping
+            # to prevent seams
+            bind_and_filter(bgl.GL_TEXTURE0, imageList[0].bindcode, "cubeLeftImage", 0)
+            bind_and_filter(bgl.GL_TEXTURE1, imageList[1].bindcode, "cubeRightImage", 1)
+            bind_and_filter(bgl.GL_TEXTURE2, imageList[2].bindcode, "cubeBottomImage", 2)
+            bind_and_filter(bgl.GL_TEXTURE3, imageList[3].bindcode, "cubeTopImage", 3)
+            bind_and_filter(bgl.GL_TEXTURE4, imageList[4].bindcode, "cubeFrontImage", 4)
+            if not self.no_back_image:
+                bind_and_filter(bgl.GL_TEXTURE5, imageList[5].bindcode, "cubeBackImage", 5)
             
             # Bind the resulting texture
-            bgl.glActiveTexture(bgl.GL_TEXTURE6)
-            bgl.glBindTexture(bgl.GL_TEXTURE_2D, offscreen.color_texture)
-            bgl.glTexParameterf(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_MIN_FILTER, bgl.GL_LINEAR);
-            bgl.glTexParameterf(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_MAG_FILTER, bgl.GL_LINEAR);
-            bgl.glTexParameteri(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_WRAP_S, bgl.GL_CLAMP_TO_EDGE)
-            bgl.glTexParameteri(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_WRAP_T, bgl.GL_CLAMP_TO_EDGE)
+            bind_and_filter(bgl.GL_TEXTURE6, offscreen.color_texture)
             
             # Render the image
             batch.draw(shader)
             
             # Unload the textures
-            imageLeft.gl_free()
-            imageRight.gl_free()
-            imageBottom.gl_free()
-            imageTop.gl_free()
-            imageFront.gl_free()
-            if not self.no_back_image:
-                imageBack.gl_free()
+            for image in imageList:
+                image.gl_free()
             
             # Read the resulting pixels into a buffer
             buffer = bgl.Buffer(bgl.GL_FLOAT, width * height * 4)
@@ -714,9 +658,9 @@ class RenderAnimation(Operator):
 class RenderToolsPanel(Panel):
     """Tools panel for VR rendering"""
    
-    bl_idname = "RENDER_TOOLS_PT_render_tools_panel2"
+    bl_idname = "RENDER_TOOLS_PT_eevr_panel"
     bl_label = "Render Tools"
-    bl_category = "VRRenderer"
+    bl_category = "eeVR"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
  
@@ -761,6 +705,20 @@ def unregister():
     bpy.utils.unregister_class(RenderToolsPanel)
     bpy.utils.unregister_class(VRRendererCancel)
  
+ 
+bl_info = {
+    "name": "eeVR",
+    "description": "Render in different projections using Eevee engine",
+    "author": "EternalTrail",
+    "version": (0, 1),
+    "blender": (2, 82, 7),
+    "location": "View3D > UI",
+    "warning": "This addon is still in early alpha, may break your blend file!",
+    "wiki_url": "https://github.com/EternalTrail/eeVR",
+    "tracker_url": "https://github.com/EternalTrail/eeVR/issues",
+    "support": "TESTING",
+    "category": "Render",
+}
  
 # If the script is not an addon when it is run, register the classes
 if __name__=="__main__":
