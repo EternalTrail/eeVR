@@ -130,7 +130,6 @@ frag_shaders = {
         float fovd = {0};
         float fovfrac = fovd/360.0;
         float sidefrac = (fovd-90.0)/180;
-        float hfov = fovfrac*PI;
         vec2 d = vTexCoord.xy;
 
         float r = length( d );
@@ -140,7 +139,7 @@ frag_shaders = {
         }}
         
         vec2 dunit = normalize( d );
-        float phi = r * hfov;
+        float phi = r * fovfrac * PI;
         vec3 pt = vec3( 1.0, 1.0, 1.0 );
         pt.xy = dunit * sin( phi );
         pt.z = cos( phi );  // Select the correct pixel
@@ -191,14 +190,14 @@ class VRRenderer:
         # Select the correct shader
         if self.is_dome:
             self.frag_shader = frag_shaders["DOME"]
+            self.frag_shader = self.frag_shader.format(self.FOV)
         else:
             if self.no_back_image:
                 self.frag_shader = frag_shaders["EQUI180"]
+                self.frag_shader = self.frag_shader.format(self.FOV)
             else:
                 self.frag_shader = frag_shaders["EQUI360"]
-        
-        self.frag_shader = self.frag_shader.format(self.FOV)
-        
+
         # Set the image/folder name to the current time
         self.start_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
         self.folder_name = "Render Result {}/".format(self.start_time)
