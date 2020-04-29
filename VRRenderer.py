@@ -11,58 +11,8 @@ from gpu_extras.batch import batch_for_shader
 
 
 frag_shaders = {
-# Define the fragment shader for the 360 degree conversion
-"EQUI360":'''
-    #define PI 3.1415926535897932384626
-    
-    // Input cubemap textures
-    uniform sampler2D cubeLeftImage;
-    uniform sampler2D cubeRightImage;
-    uniform sampler2D cubeBottomImage;
-    uniform sampler2D cubeTopImage;
-    uniform sampler2D cubeBackImage;
-    uniform sampler2D cubeFrontImage;
-
-    in vec2 vTexCoord;
-
-    out vec4 fragColor;
-
-    void main() {
-    
-        // Calculate the pointing angle
-        float azimuth = vTexCoord.x * PI;
-        float elevation = vTexCoord.y * PI / 2.0;
-        
-        // Calculate the pointing vector
-        vec3 pt;
-        pt.x = cos(elevation) * sin(azimuth);
-        pt.y = sin(elevation);
-        pt.z = cos(elevation) * cos(azimuth);
-        
-        // Select the correct pixel
-        if ((abs(pt.x) >= abs(pt.y)) && (abs(pt.x) >= abs(pt.z))) {
-            if (pt.x <= 0.0) {
-                fragColor = texture(cubeLeftImage, vec2(((-pt.z/pt.x)+1.0)/2.0,((-pt.y/pt.x)+1.0)/2.0));
-            } else {
-                fragColor = texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0)/2.0,((pt.y/pt.x)+1.0)/2.0));
-            }
-        } else if (abs(pt.y) >= abs(pt.z)) {
-            if (pt.y <= 0.0) {
-                fragColor = texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/2.0));
-            } else {
-                fragColor = texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/2.0));
-            }
-        } else {
-            if (pt.z <= 0.0) {
-                fragColor = texture(cubeBackImage, vec2(((pt.x/pt.z)+1.0)/2.0,((-pt.y/pt.z)+1.0)/2.0));
-            } else {
-                fragColor = texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
-            }
-        }
-    }
-''',
-# Define the fragment shader for the 180 degree conversion
-"EQUI180": '''
+# Define the fragment shader for the 180-270 degree equirectangular conversion
+"EQUI_L": '''
     #define PI 3.1415926535897932384626
     
     // Input cubemap textures
@@ -109,8 +59,112 @@ frag_shaders = {
         }}
     }}
 ''',
-# Define the shader for the dome projection
-"DOME": '''
+# Define the fragment shader for the 270-360 degree equirectangular conversion
+"EQUI_H":'''
+    #define PI 3.1415926535897932384626
+    
+    // Input cubemap textures
+    uniform sampler2D cubeLeftImage;
+    uniform sampler2D cubeRightImage;
+    uniform sampler2D cubeBottomImage;
+    uniform sampler2D cubeTopImage;
+    uniform sampler2D cubeBackImage;
+    uniform sampler2D cubeFrontImage;
+
+    in vec2 vTexCoord;
+
+    out vec4 fragColor;
+
+    void main() {{
+    
+        // Calculate the pointing angle
+        float azimuth = vTexCoord.x * PI * ({0}/360.0);
+        float elevation = vTexCoord.y * PI / 2.0;
+        
+        // Calculate the pointing vector
+        vec3 pt;
+        pt.x = cos(elevation) * sin(azimuth);
+        pt.y = sin(elevation);
+        pt.z = cos(elevation) * cos(azimuth);
+        
+        // Select the correct pixel
+        if ((abs(pt.x) >= abs(pt.y)) && (abs(pt.x) >= abs(pt.z))) {{
+            if (pt.x <= 0.0) {{
+                fragColor = texture(cubeLeftImage, vec2(((-pt.z/pt.x)+1.0)/2.0,((-pt.y/pt.x)+1.0)/2.0));
+            }} else {{
+                fragColor = texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0)/2.0,((pt.y/pt.x)+1.0)/2.0));
+            }}
+        }} else if (abs(pt.y) >= abs(pt.z)) {{
+            if (pt.y <= 0.0) {{
+                fragColor = texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/2.0));
+            }} else {{
+                fragColor = texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/2.0));
+            }}
+        }} else {{
+            if (pt.z <= 0.0) {{
+                fragColor = texture(cubeBackImage, vec2(((pt.x/pt.z)+1.0)/2.0,((-pt.y/pt.z)+1.0)/2.0));
+            }} else {{
+                fragColor = texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
+            }}
+        }}
+    }}
+''',
+# Define the fragment shader for the 180-270 degree dome conversion
+"DOME_L": '''
+    #define PI 3.1415926535897932384626
+    
+    // Input cubemap textures
+    uniform sampler2D cubeLeftImage;
+    uniform sampler2D cubeRightImage;
+    uniform sampler2D cubeBottomImage;
+    uniform sampler2D cubeTopImage;
+    uniform sampler2D cubeFrontImage;
+
+    in vec2 vTexCoord;
+
+    out vec4 fragColor;
+
+    void main() {{
+
+        float fovd = {0};
+        float fovfrac = fovd/360.0;
+        float sidefrac = (fovd-90.0)/180;
+        vec2 d = vTexCoord.xy;
+
+        float r = length(d);
+        if( r > 1.0 ) {{
+            fragColor = vec4(0.0, 0.0, 0.0, 1.0);
+            return;
+        }}
+        
+        vec2 dunit = normalize(d);
+        float phi = fovfrac*r*PI;
+        vec3 pt;
+        
+        pt.x = dunit.x*sin(phi);
+        pt.y = dunit.y*sin(phi);
+        pt.z = cos(phi);
+
+        // Select the correct pixel
+        if ((abs(pt.x) >= abs(pt.y)) && (abs(pt.x) >= abs(pt.z))) {{
+            if (pt.x <= 0.0) {{
+                fragColor = texture(cubeLeftImage, vec2((((-pt.z/pt.x))+(2.0*sidefrac-1.0))/(2.0*sidefrac),((-pt.y/pt.x)+1.0)/2.0));
+            }} else {{
+                fragColor = texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0)/(2.0*sidefrac),((pt.y/pt.x)+1.0)/2.0));
+            }}
+        }} else if (abs(pt.y) >= abs(pt.z)) {{
+            if (pt.y <= 0.0) {{
+                fragColor = texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+(2.0*sidefrac-1.0))/(2.0*sidefrac)));
+            }} else {{
+                fragColor = texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/(2.0*sidefrac)));
+            }}
+        }} else {{
+            fragColor = texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
+        }}
+    }}
+''',
+# Define the fragment shader for the 270-360 degree dome conversion
+"DOME_H":'''
     #define PI 3.1415926535897932384626
     
     // Input cubemap textures
@@ -127,35 +181,36 @@ frag_shaders = {
 
     void main() {{
 
-        float fovd = {0};
-        float fovfrac = fovd/360.0;
-        float sidefrac = (fovd-90.0)/180;
+        float fovfrac = {0}/360.0;
         vec2 d = vTexCoord.xy;
 
-        float r = length( d );
+        float r = length(d);
         if( r > 1.0 ) {{
             fragColor = vec4(0.0, 0.0, 0.0, 1.0);
             return;
         }}
         
-        vec2 dunit = normalize( d );
-        float phi = r * fovfrac * PI;
-        vec3 pt = vec3( 1.0, 1.0, 1.0 );
-        pt.xy = dunit * sin( phi );
-        pt.z = cos( phi );  // Select the correct pixel
+        vec2 dunit = normalize(d);
+        float phi = fovfrac*r*PI;
+        vec3 pt;
+        
+        pt.x = dunit.x*sin(phi);
+        pt.y = dunit.y*sin(phi);
+        pt.z = cos(phi); 
+
         
         // Select the correct pixel
         if ((abs(pt.x) >= abs(pt.y)) && (abs(pt.x) >= abs(pt.z))) {{
             if (pt.x <= 0.0) {{
-                fragColor = texture(cubeLeftImage, vec2((((-pt.z/pt.x))+(2.0*sidefrac-1.0))/(2.0*sidefrac),((-pt.y/pt.x)+1.0)/2.0));
+                fragColor = texture(cubeLeftImage, vec2(((-pt.z/pt.x)+1.0)/2.0,((-pt.y/pt.x)+1.0)/2.0));
             }} else {{
-                fragColor = texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0)/(2.0*sidefrac),((pt.y/pt.x)+1.0)/2.0));
+                fragColor = texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0)/2.0,((pt.y/pt.x)+1.0)/2.0));
             }}
         }} else if (abs(pt.y) >= abs(pt.z)) {{
             if (pt.y <= 0.0) {{
-                fragColor = texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+(2.0*sidefrac-1.0))/(2.0*sidefrac)));
+                fragColor = texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/2.0));
             }} else {{
-                fragColor = texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/(2.0*sidefrac)));
+                fragColor = texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/2.0));
             }}
         }} else {{
             if (pt.z <= 0.0) {{
@@ -189,15 +244,19 @@ class VRRenderer:
         
         # Select the correct shader
         if self.is_dome:
-            self.frag_shader = frag_shaders["DOME"]
-            self.frag_shader = self.frag_shader.format(self.FOV)
+            if self.no_back_image:
+                self.frag_shader = frag_shaders["DOME_L"]
+            else:
+                self.frag_shader = frag_shaders["DOME_H"]
         else:
             if self.no_back_image:
-                self.frag_shader = frag_shaders["EQUI180"]
-                self.frag_shader = self.frag_shader.format(self.FOV)
+                self.frag_shader = frag_shaders["EQUI_L"]
             else:
-                self.frag_shader = frag_shaders["EQUI360"]
-
+                self.frag_shader = frag_shaders["EQUI_H"]
+        
+        # Insert the FOV into the shader
+        self.frag_shader = self.frag_shader.format(self.FOV)
+        
         # Set the image/folder name to the current time
         self.start_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
         self.folder_name = "Render Result {}/".format(self.start_time)
