@@ -232,7 +232,8 @@ class VRRenderer:
             raise PermissionError("Save file before rendering")
         
         # Set internal variables for the class
-        self.camera = bpy.context.scene.camera
+        self.scene = bpy.context.scene
+        self.camera = self.scene.camera
         self.path = bpy.path.abspath("//")
         self.is_stereo = is_stereo
         self.is_animation = is_animation
@@ -286,16 +287,16 @@ class VRRenderer:
         self.camera.data.stereo.pivot = 'CENTER'
         self.camera.data.angle = pi/2
         
-        self.image_size = [bpy.context.scene.render.resolution_x,\
-                           bpy.context.scene.render.resolution_y]
+        self.image_size = [self.scene.render.resolution_x,\
+                           self.scene.render.resolution_y]
         
         self.side_resolution = int(max(self.image_size)+4-max(self.image_size)%4)/2 if max(self.image_size)%4 > 0\
                                else int(max(self.image_size)/2)
         if self.is_stereo:
-            self.view_format = bpy.context.scene.render.image_settings.views_format
-            bpy.context.scene.render.image_settings.views_format = 'STEREO_3D'
-            self.stereo_mode = bpy.context.scene.render.image_settings.stereo_3d_format.display_mode
-            bpy.context.scene.render.image_settings.stereo_3d_format.display_mode = 'TOPBOTTOM'
+            self.view_format = self.scene.render.image_settings.views_format
+            self.scene.render.image_settings.views_format = 'STEREO_3D'
+            self.stereo_mode = self.scene.render.image_settings.stereo_3d_format.display_mode
+            self.scene.render.image_settings.stereo_3d_format.display_mode = 'TOPBOTTOM'
 
         self.direction_offsets = self.find_direction_offsets()
         if self.no_back_image:
@@ -442,8 +443,8 @@ class VRRenderer:
         if self.no_back_image:
             self.camera.data.shift_x = self.camera_shift[direction][0]
             self.camera.data.shift_y = self.camera_shift[direction][1]
-            bpy.context.scene.render.resolution_x = self.camera_shift[direction][2]
-            bpy.context.scene.render.resolution_y = self.camera_shift[direction][3]
+            self.scene.render.resolution_x = self.camera_shift[direction][2]
+            self.scene.render.resolution_y = self.camera_shift[direction][3]
         
 
     def clean_up(self):
@@ -457,11 +458,11 @@ class VRRenderer:
         self.camera.rotation_euler = self.camera_rotation
         self.camera.data.shift_x = 0
         self.camera.data.shift_y = 0
-        bpy.context.scene.render.resolution_x = self.image_size[0]
-        bpy.context.scene.render.resolution_y = self.image_size[1]
+        self.scene.render.resolution_x = self.image_size[0]
+        self.scene.render.resolution_y = self.image_size[1]
         if self.is_stereo:
-            bpy.context.scene.render.image_settings.views_format = self.view_format
-            bpy.context.scene.render.image_settings.stereo_3d_format.display_mode = self.stereo_mode
+            self.scene.render.image_settings.views_format = self.view_format
+            self.scene.render.image_settings.stereo_3d_format.display_mode = self.stereo_mode
         for filename in self.createdFiles:
             os.remove(filename)
     
@@ -469,8 +470,8 @@ class VRRenderer:
     def render_image(self, direction):
         
         # Render the image and load it into the script
-        tmp = bpy.data.scenes['Scene'].render.filepath
-        bpy.data.scenes['Scene'].render.filepath = self.path + 'temp_img_store_'+direction+'.png'
+        tmp = self.scene.render.filepath
+        self.scene.render.filepath = self.path + 'temp_img_store_'+direction+'.png'
         
         # If rendering for VR, render the side images separately to avoid seams
         if self.is_stereo and direction in {'right', 'left'}:
@@ -481,23 +482,23 @@ class VRRenderer:
             if imageR in bpy.data.images:
                 bpy.data.images.remove(bpy.data.images[imageR])
             
-            bpy.context.scene.render.use_multiview = False
+            self.scene.render.use_multiview = False
             tmp_loc = list(self.camera_empty.location)
             camera_angle = self.direction_offsets['front'][2]
             self.camera_empty.location = [tmp_loc[0]+(0.5*self.IPD*cos(camera_angle)),\
                                     tmp_loc[1]+(0.5*self.IPD*sin(camera_angle)),\
                                     tmp_loc[2]]
-            bpy.data.scenes['Scene'].render.filepath = self.path + imageL
+            self.scene.render.filepath = self.path + imageL
             bpy.ops.render.render(write_still=True)
             renderedImageL = bpy.data.images.load(self.path + imageL)
             
             self.camera_empty.location = [tmp_loc[0]-(0.5*self.IPD*cos(camera_angle)),\
                                     tmp_loc[1]-(0.5*self.IPD*sin(camera_angle)),\
                                     tmp_loc[2]]
-            bpy.data.scenes['Scene'].render.filepath = self.path + imageR
+            self.scene.render.filepath = self.path + imageR
             bpy.ops.render.render(write_still=True)
             renderedImageR = bpy.data.images.load(self.path + imageR)
-            bpy.context.scene.render.use_multiview = True
+            self.scene.render.use_multiview = True
             self.createdFiles.update({self.path+imageR, self.path+imageL})
             self.camera_empty.location = tmp_loc
         
@@ -543,7 +544,7 @@ class VRRenderer:
             renderedImageR = None
             self.createdFiles.add(self.path + 'temp_img_store_'+direction+'.png')
         
-        bpy.data.scenes['Scene'].render.filepath = tmp
+        self.scene.render.filepath = tmp
         return renderedImageL, renderedImageR
     
     
@@ -576,18 +577,18 @@ class VRRenderer:
     def render_and_save(self):
                
         # Set the render resolution dimensions to the maximum of the two input dimensions
-        bpy.context.scene.render.resolution_x = self.side_resolution
-        bpy.context.scene.render.resolution_y = self.side_resolution
+        self.scene.render.resolution_x = self.side_resolution
+        self.scene.render.resolution_y = self.side_resolution
         self.camera.data.shift_x = 0
         self.camera.data.shift_y = 0
        
        
-        frame_step = bpy.context.scene.frame_step
+        frame_step = self.scene.frame_step
        
         # Render the images and return their names
         imageList, imageList2 = self.render_images()
         if self.is_animation:
-            image_name = "frame{:06d}.png".format(bpy.context.scene.frame_current)
+            image_name = "frame{:06d}.png".format(self.scene.frame_current)
         else:
             image_name = "Render Result {}.png".format(self.start_time)
        
@@ -617,7 +618,7 @@ class VRRenderer:
         
         if self.is_animation:
             imageResult.save_render(self.path+self.folder_name+image_name)
-            bpy.context.scene.frame_set(bpy.context.scene.frame_current+frame_step)
+            self.scene.frame_set(self.scene.frame_current+frame_step)
         else:
             imageResult.save_render(self.path+image_name)
         
