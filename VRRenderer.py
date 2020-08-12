@@ -514,6 +514,7 @@ class VRRenderer:
             if imageR in bpy.data.images:
                 bpy.data.images.remove(bpy.data.images[imageR])
             renderedImage =  bpy.data.images.load(self.path + image_name)
+            renderedImage.colorspace_settings.name='Linear'
             imageLen = len(renderedImage.pixels)
             if self.no_back_image and direction in {'top', 'bottom'}:
                 renderedImageL = bpy.data.images.new(imageL, self.side_resolution,\
