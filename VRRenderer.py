@@ -265,8 +265,8 @@ class VRRenderer:
             else:
                 self.frag_shader = frag_shaders["EQUI_H"]
 
-                # Insert the FOV into the shader
-                self.frag_shader = self.frag_shader.format(self.FOV)
+            # Insert the FOV into the shader
+            self.frag_shader = self.frag_shader.format(self.FOV)
         
         # Set the image/folder name to the current time
         self.start_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
