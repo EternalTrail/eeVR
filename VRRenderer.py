@@ -127,6 +127,7 @@ frag_shaders = {
     void main() {{
 
         float fovd = {0};
+        int domeMode = {1};
         float fovfrac = fovd/360.0;
         float sidefrac = (fovd-90.0)/180;
         vec2 d = vTexCoord.xy;
@@ -141,8 +142,10 @@ frag_shaders = {
         float phi = fovfrac*r*PI;
         vec3 pt;
         
-        pt.x = dunit.x*sin(phi);
-        pt.y = dunit.y*sin(phi);
+        if(domeMode == 0) pt.xy = dunit * phi;
+        if(domeMode == 1) pt.xy = dunit * sin(phi);
+        if(domeMode == 2) pt.xy = 2.0 * dunit * sin(phi / 2.0);
+        if(domeMode == 3) pt.xy = 2.0 * dunit * tan(phi / 2.0);
         pt.z = cos(phi);
 
         // Select the correct pixel
@@ -182,6 +185,7 @@ frag_shaders = {
     void main() {{
 
         float fovfrac = {0}/360.0;
+        int domeMode = {1};
         vec2 d = vTexCoord.xy;
 
         float r = length(d);
@@ -194,8 +198,10 @@ frag_shaders = {
         float phi = fovfrac*r*PI;
         vec3 pt;
         
-        pt.x = dunit.x*sin(phi);
-        pt.y = dunit.y*sin(phi);
+        if(domeMode == 0) pt.xy = dunit * phi;
+        if(domeMode == 1) pt.xy = dunit * sin(phi);
+        if(domeMode == 2) pt.xy = 2.0 * dunit * sin(phi / 2.0);
+        if(domeMode == 3) pt.xy = 2.0 * dunit * tan(phi / 2.0);
         pt.z = cos(phi); 
 
         
@@ -241,6 +247,7 @@ class VRRenderer:
         self.no_back_image = (self.FOV <= 270)
         self.no_side_images = (self.FOV <= 90) # TODO - Not implemented yet, probably not needed
         self.is_dome = (mode == 'DOME')
+        self.domeMode = bpy.context.scene.domeModeEnum
         self.createdFiles = set()
         
         # Select the correct shader
@@ -249,14 +256,17 @@ class VRRenderer:
                 self.frag_shader = frag_shaders["DOME_L"]
             else:
                 self.frag_shader = frag_shaders["DOME_H"]
+
+            # Insert the FOV and Mode  into the shader
+            self.frag_shader = self.frag_shader.format(self.FOV, int(self.domeMode))
         else:
             if self.no_back_image:
                 self.frag_shader = frag_shaders["EQUI_L"]
             else:
                 self.frag_shader = frag_shaders["EQUI_H"]
-        
-        # Insert the FOV into the shader
-        self.frag_shader = self.frag_shader.format(self.FOV)
+
+                # Insert the FOV into the shader
+                self.frag_shader = self.frag_shader.format(self.FOV)
         
         # Set the image/folder name to the current time
         self.start_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
@@ -730,6 +740,8 @@ class RenderToolsPanel(Panel):
         layout = self.layout
         col = layout.column()
         col.prop(context.scene, 'renderModeEnum')
+        if context.scene.renderModeEnum == 'DOME':
+            col.prop(context.scene, 'domeModeEnum')
         col.prop(context.scene, 'renderFOV')
         col.operator("wl.render_image", text="Render Image")
         col.operator("wl.render_animation", text="Render Animation")
@@ -745,6 +757,13 @@ def register():
                  ('DOME', 'Full Dome', 'Renders in full dome projection')],
         default='EQUI',
         name="Mode")
+    bpy.types.Scene.domeModeEnum = bpy.props.EnumProperty(
+        items = [('0', 'Equidistant (VTA)', 'Renders in equidistant dome projection'),
+                 ('1', 'Hemispherical (VTH)', 'Renders in hemispherical dome projection'),
+                 ('2', 'Equisolid', 'Renders in equisolid dome projection'),
+                 ('3', 'Stereographic', 'Renders in Stereographic dome projection')],
+        default='0',
+        name="Method")
     bpy.types.Scene.renderFOV = bpy.props.FloatProperty(180.0,default=180.0, name="FOV", min=180, max=360,
                                 description="Field of view in degrees")
     bpy.types.Scene.cancelVRRenderer = bpy.props.BoolProperty(name="Cancel", default=True)
@@ -758,6 +777,7 @@ def register():
  
 # Unregister all classes
 def unregister():
+    del bpy.types.Scene.domeModeEnum
     del bpy.types.Scene.renderModeEnum
     del bpy.types.Scene.renderFOV
     bpy.utils.unregister_class(RenderImage)
