@@ -231,7 +231,7 @@ frag_shaders = {
 
 class VRRenderer:
     
-    def __init__(self, is_stereo = False, is_animation = False, mode = 'EQUI', FOV = 180):
+    def __init__(self, is_stereo = False, is_animation = False, mode = 'EQUI', FOV = 180, folder = ''):
         
         # Check if the file is saved or not, can cause errors when not saved
         if not bpy.data.is_saved:
@@ -239,7 +239,22 @@ class VRRenderer:
         
         # Set internal variables for the class
         self.scene = bpy.context.scene
-        self.camera = self.scene.camera
+        ##### newly edited codes begin
+        # save original active camera handle
+        self.camera_origin = bpy.context.scene.camera
+        # create a new camera for rendering
+        bpy.ops.object.camera_add()
+        self.camera = bpy.context.object
+        self.camera.name = 'eeVR_camera'
+        # set new cam active
+        bpy.context.scene.camera = self.camera
+        # set coordinates same as origin by using world matrix already transformed but not location or rotation
+        # and always using it to update correct coordinates before rendering
+        # no constraints, parent, drivers and keyframes for new cam, now we can handle cameras with those stuff
+        self.camera.matrix_world = self.camera_origin.matrix_world
+        # transfer key attributes that may affect rendering, conv dis not needed 'cause it is parallel
+        self.camera.data.stereo.interocular_distance = self.camera_origin.data.stereo.interocular_distance
+        ##### newly edited codes end
         self.path = bpy.path.abspath("//")
         self.is_stereo = is_stereo
         self.is_animation = is_animation
@@ -268,26 +283,30 @@ class VRRenderer:
             # Insert the FOV into the shader
             self.frag_shader = self.frag_shader.format(self.FOV)
         
-        # Set the image/folder name to the current time
+        # Set the image name to the current time
         self.start_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-        self.folder_name = "Render Result {}/".format(self.start_time)
+        # get folder name from outside
+        self.folder_name = folder
         
         # Get initial camera and output information
+        ##### newly edited codes begin
+        # now origin camera data not need store, and no more need to use empty as proxy
         self.camera_rotation = list(self.camera.rotation_euler)
         self.IPD = self.camera.data.stereo.interocular_distance
-        self.camera_type = self.camera.data.type
-        self.camera_angle = self.camera.data.angle
-        self.stereo_type = self.camera.data.stereo.convergence_mode
-        self.stereo_pivot = self.camera.data.stereo.pivot
+        #self.camera_type = self.camera.data.type
+        #self.camera_angle = self.camera.data.angle
+        #self.stereo_type = self.camera.data.stereo.convergence_mode
+        #self.stereo_pivot = self.camera.data.stereo.pivot
         
         # Create an empty to be used to control the camera
-        try:
-            self.camera_empty = bpy.data.objects['eeVR_CAMERA_EMPTY']
-        except KeyError:
-            self.camera_empty = bpy.data.objects.new('eeVR_CAMERA_EMPTY', None)
+        #try:
+        #    self.camera_empty = bpy.data.objects['eeVR_CAMERA_EMPTY']
+        #except KeyError:
+        #    self.camera_empty = bpy.data.objects.new('eeVR_CAMERA_EMPTY', None)
         
         # Create a copy transforms constraint for the camera
-        self.trans_constraint = self.camera.constraints.new('COPY_TRANSFORMS')
+        #self.trans_constraint = self.camera.constraints.new('COPY_TRANSFORMS')
+        ##### newly edited codes end
         
         #self.camera.rotation_euler
         
@@ -419,6 +438,10 @@ class VRRenderer:
     
     def find_direction_offsets(self):
         
+        ##### newly added codes begin
+        # update location and rotation of our camera from origin one
+        self.camera.matrix_world = self.camera_origin.matrix_world
+        ##### newly added codes end
         # Calculate the pointing directions of the camera for each face of the cube
         # Using euler.rotate_axis() to handle, notice that rotation should be done on copies
         eul = self.camera.rotation_euler.copy()
@@ -448,7 +471,8 @@ class VRRenderer:
     def set_camera_direction(self, direction):
         
         # Set the camera to the required postion    
-        self.camera_empty.rotation_euler = self.direction_offsets[direction]
+        #self.camera_empty.rotation_euler = self.direction_offsets[direction]
+        self.camera.rotation_euler = self.direction_offsets[direction]
         
         if self.no_back_image:
             self.camera.data.shift_x = self.camera_shift[direction][0]
@@ -460,14 +484,18 @@ class VRRenderer:
     def clean_up(self):
         
         # Reset all the variables that were changed
-        self.camera.constraints.remove(self.trans_constraint)
-        self.camera.data.type = self.camera_type
-        self.camera.data.stereo.convergence_mode = self.stereo_type
-        self.camera.data.stereo.pivot = self.stereo_pivot
-        self.camera.data.angle = self.camera_angle
-        self.camera.rotation_euler = self.camera_rotation
-        self.camera.data.shift_x = 0
-        self.camera.data.shift_y = 0
+        ##### newly edited codes begin
+        #self.camera.constraints.remove(self.trans_constraint)
+        #self.camera.data.type = self.camera_type
+        #self.camera.data.stereo.convergence_mode = self.stereo_type
+        #self.camera.data.stereo.pivot = self.stereo_pivot
+        #self.camera.data.angle = self.camera_angle
+        #self.camera.rotation_euler = self.camera_rotation
+        #self.camera.data.shift_x = 0
+        #self.camera.data.shift_y = 0
+        bpy.context.scene.camera = self.camera_origin
+        bpy.data.objects.remove(self.camera)
+        ##### newly edited codes end
         self.scene.render.resolution_x = self.image_size[0]
         self.scene.render.resolution_y = self.image_size[1]
         if self.is_stereo:
@@ -493,16 +521,23 @@ class VRRenderer:
                 bpy.data.images.remove(bpy.data.images[imageR])
             
             self.scene.render.use_multiview = False
-            tmp_loc = list(self.camera_empty.location)
+            #tmp_loc = list(self.camera_empty.location)
+            tmp_loc = list(self.camera.location)
             camera_angle = self.direction_offsets['front'][2]
-            self.camera_empty.location = [tmp_loc[0]+(0.5*self.IPD*cos(camera_angle)),\
+            #self.camera_empty.location = [tmp_loc[0]+(0.5*self.IPD*cos(camera_angle)),\
+            #                        tmp_loc[1]+(0.5*self.IPD*sin(camera_angle)),\
+            #                        tmp_loc[2]]
+            self.camera.location = [tmp_loc[0]+(0.5*self.IPD*cos(camera_angle)),\
                                     tmp_loc[1]+(0.5*self.IPD*sin(camera_angle)),\
                                     tmp_loc[2]]
             self.scene.render.filepath = self.path + imageL
             bpy.ops.render.render(write_still=True)
             renderedImageL = bpy.data.images.load(self.path + imageL)
             
-            self.camera_empty.location = [tmp_loc[0]-(0.5*self.IPD*cos(camera_angle)),\
+            #self.camera_empty.location = [tmp_loc[0]-(0.5*self.IPD*cos(camera_angle)),\
+            #                        tmp_loc[1]-(0.5*self.IPD*sin(camera_angle)),\
+            #                        tmp_loc[2]]
+            self.camera.location = [tmp_loc[0]-(0.5*self.IPD*cos(camera_angle)),\
                                     tmp_loc[1]-(0.5*self.IPD*sin(camera_angle)),\
                                     tmp_loc[2]]
             self.scene.render.filepath = self.path + imageR
@@ -510,7 +545,8 @@ class VRRenderer:
             renderedImageR = bpy.data.images.load(self.path + imageR)
             self.scene.render.use_multiview = True
             self.createdFiles.update({self.path+imageR, self.path+imageL})
-            self.camera_empty.location = tmp_loc
+            #self.camera_empty.location = tmp_loc
+            self.camera.location = tmp_loc
         
         elif self.is_stereo:
             bpy.ops.render.render(write_still=True)
@@ -567,9 +603,9 @@ class VRRenderer:
         image_list_2 = []
         
         self.direction_offsets = self.find_direction_offsets()
-        self.camera_empty.location = self.camera.location
-        self.camera_empty.rotation_euler = self.camera.rotation_euler
-        self.trans_constraint.target = self.camera_empty
+        #self.camera_empty.location = self.camera.location
+        #self.camera_empty.rotation_euler = self.camera.rotation_euler
+        #self.trans_constraint.target = self.camera_empty
         for direction in directions:
             if direction == 'back' and self.no_back_image:
                 continue
@@ -580,7 +616,7 @@ class VRRenderer:
                 image_list_2.append(img2)
         
         self.set_camera_direction('front')
-        self.trans_constraint.target = None
+        #self.trans_constraint.target = None
         
         return image_list_1, image_list_2
    
@@ -628,10 +664,15 @@ class VRRenderer:
             imageResult = self.cubemap_to_equirectangular(imageList, "RenderResult")
         
         if self.is_animation:
-            imageResult.save_render(self.path+self.folder_name+image_name)
+            # Color Management Settings issue solved by nagadomi
+            imageResult.file_format = 'PNG'
+            imageResult.filepath_raw = self.path+self.folder_name+image_name            
+            imageResult.save()
             self.scene.frame_set(self.scene.frame_current+frame_step)
         else:
-            imageResult.save_render(self.path+image_name)
+            imageResult.file_format = 'PNG'
+            imageResult.filepath_raw = self.path+image_name
+            imageResult.save()
         
         bpy.data.images.remove(imageResult)
  
@@ -704,12 +745,16 @@ class RenderAnimation(Operator):
        
         mode = bpy.context.scene.renderModeEnum
         FOV = bpy.context.scene.renderFOV
-        self._renderer = VRRenderer(bpy.context.scene.render.use_multiview, True, mode, FOV)
+        # knowing it's animation, creates folder outside vrrender class, pass folder name to it
+        start_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+        folder_name = "Render Result {}/".format(start_time)
+        path = bpy.path.abspath("//")
+        os.makedirs(path+folder_name, exist_ok=True)
+        self._renderer = VRRenderer(bpy.context.scene.render.use_multiview, True, mode, FOV, folder_name)
  
         self.frame_end = bpy.context.scene.frame_end
         frame_start = bpy.context.scene.frame_start
         bpy.context.scene.frame_set(frame_start)
- 
         wm = context.window_manager
         self._timer = wm.event_timer_add(5, window=context.window)
         wm.modal_handler_add(self)        
