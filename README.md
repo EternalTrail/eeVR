@@ -5,13 +5,14 @@ Blender addon to render 360° and 180° images and videos in eevee engine with s
 
 You will need to get [**Blender 2.8X**](https://www.blender.org), install it, download the script **VRRenderer.py**, load the addon into Blender by installing the VRRenderer.py file in Blender Preferences > Add-ons > Install, search for "eeVR" under the Testing tab and click the checkbox to enable it. A tool panel will appear in the 3D Viewport with mode selection, FOV value adjustment, and buttons for rendering stills and animations. **The rendered images/image sequences will be stored in the same directory as the .blend file**.
 
+**VRRenderer_ALT.py** is an alternative version, it includes simplified VR renderer, useful to render previews, when view angle not bigger than 180deg (better for 120deg), it will work. And it has the **custom save folder** name option, may be useful for some situations.
+
 **Beware this is still in development so I suggest backing up whatever project you're using this on before you begin rendering.**
 
 ## What doesn't work at the moment
 
 The script is very picky with the way the things are set up before rendering at the moment. These are the most common problems people run into:
-- Output format must be PNG, or else the render will fail, and will potentially mess up some setting/positions of the camera.
-- The camera cannot be a child of any object as the script internally sets an empty as its parent, your renders will turn out corrupted if your camera has another parent.
+- Output format must be PNG, or else the render will fail, and will potentially mess up some settings of the camera.
 - Screen space effects will create visible seams in positions where the pictures join together, so it's best if those settings are turned off for the moment. **A possible way to mitigate some of the seams is to use overscan which is located under _Render Properties > Film > Overscan_**.
 - Some of the rendering settings will be force set since they create issues, such as stereoscopy mode in camera settings is forced to parallel, since that was done in order to prevent seams.
 
