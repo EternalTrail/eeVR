@@ -3,7 +3,7 @@ Blender addon to render 360° and 180° images and videos in eevee engine with s
 
 ## Getting Started
 
-You will need to get [**Blender 2.8X**](https://www.blender.org), install it, download the script **VRRenderer.py**, load the addon into Blender by installing the VRRenderer.py file in Blender Preferences > Add-ons > Install, search for "eeVR" under the Testing tab and click the checkbox to enable it. A tool panel will appear in the 3D Viewport with mode selection, FOV value adjustment, and buttons for rendering stills and animations. **The rendered images/image sequences will be stored in the same directory as the .blend file**.
+You will need to get [**Blender 2.8X** or **Blender 2.9X**](https://www.blender.org), install it, download the zip file from this GitHub, load the addon into Blender by installing the zip file in Blender Preferences > Add-ons > Install, search for "eeVR" under the Testing tab and click the checkbox to enable it. A tool panel will appear in the 3D Viewport with mode selection, FOV value adjustment, and buttons for rendering stills and animations. **The rendered images/image sequences will be stored in the same directory as the .blend file**.
 
 **VRRenderer_ALT.py** is an alternative version, it includes simplified VR renderer, useful to render previews, when view angle not bigger than 180deg (better for 120deg), it will work. And it has the **custom save folder** name option, may be useful for some situations.
 
