@@ -8,7 +8,7 @@ from bpy.types import Operator, Panel
 from math import sin, cos, pi
 from datetime import datetime
 from gpu_extras.batch import batch_for_shader
-
+import time
 
 frag_shaders = {
 # Define the fragment shader for the 180-270 degree equirectangular conversion
@@ -700,7 +700,9 @@ class RenderImage(Operator):
         mode = bpy.context.scene.renderModeEnum
         FOV = bpy.context.scene.renderFOV
         renderer = VRRenderer(bpy.context.scene.render.use_multiview, False, mode, FOV)
+        now = time.time()
         renderer.render_and_save() 
+        print("VRRenderer: {} seconds".format(round(time.time() - now, 2)))
         renderer.clean_up() 
         
         return {'FINISHED'}
@@ -730,7 +732,9 @@ class RenderAnimation(Operator):
            
             if bpy.context.scene.frame_current <= self.frame_end:
                 print("VRRenderer: Rendering frame {}".format(bpy.context.scene.frame_current))
+                now = time.time()
                 self._renderer.render_and_save()
+                print("VRRenderer: {} seconds".format(round(time.time() - now, 2)))
                 self._timer = wm.event_timer_add(0.1, window=context.window)
             else:
                 self.clean(context)
