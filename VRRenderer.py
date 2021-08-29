@@ -432,7 +432,7 @@ class VRRenderer:
             bpy.data.images.new(outputName, width, height)
         imageRes = bpy.data.images[outputName]
         imageRes.scale(width, height)
-        imageRes.pixels = buffer
+        imageRes.pixels.foreach_set(buffer)
         return imageRes
 
     
@@ -572,12 +572,14 @@ class VRRenderer:
                 renderedImageR = bpy.data.images.new(imageR, self.side_resolution, self.side_resolution)
             
             # Split the render into two images
+            buff = np.empty((imageLen,), dtype=np.float32)
+            renderedImage.pixels.foreach_get(buff)
             if direction == 'back':
-                renderedImageL.pixels = renderedImage.pixels[int(imageLen/2):]
-                renderedImageR.pixels = renderedImage.pixels[0:int(imageLen/2)]
+                renderedImageL.pixels.foreach_set(buff[imageLen//2:])
+                renderedImageR.pixels.foreach_set(buff[:imageLen//2])
             else:
-                renderedImageR.pixels = renderedImage.pixels[int(imageLen/2):]
-                renderedImageL.pixels = renderedImage.pixels[0:int(imageLen/2)]
+                renderedImageR.pixels.foreach_set(buff[imageLen//2:])
+                renderedImageL.pixels.foreach_set(buff[:imageLen//2])
             renderedImageL.pack()
             renderedImageR.pack()
             bpy.data.images.remove(renderedImage)
@@ -651,12 +653,17 @@ class VRRenderer:
             imageResult = bpy.data.images[image_name]
             if self.stereo_mode == 'SIDEBYSIDE':
                 imageResult.scale(2*imageResult1.size[0], imageResult1.size[1])
-                img2arr = np.reshape(np.array(imageResult2.pixels),(imageResult2.size[1], 4*imageResult2.size[0]))
-                img1arr = np.reshape(np.array(imageResult1.pixels),(imageResult1.size[1], 4*imageResult1.size[0]))
-                imageResult.pixels = list(np.concatenate((img2arr, img1arr),axis=1).flatten())
+                img2arr = np.empty((imageResult2.size[1], 4 * imageResult2.size[0]), dtype=np.float32)
+                imageResult2.pixels.foreach_get(img2arr.ravel())
+                img1arr = np.empty((imageResult1.size[1], 4 * imageResult1.size[0]), dtype=np.float32)
+                imageResult1.pixels.foreach_get(img1arr.ravel())
+                imageResult.pixels.foreach_set(np.concatenate((img2arr, img1arr), axis=1).ravel())
             else:
                 imageResult.scale(imageResult1.size[0], 2*imageResult1.size[1])
-                imageResult.pixels = list(imageResult2.pixels) + list(imageResult1.pixels)
+                buff = np.empty((imageResult1.size[0] * 2 * imageResult1.size[1] * 4,), dtype=np.float32)
+                imageResult2.pixels.foreach_get(buff[:buff.shape[0]//2].ravel())
+                imageResult1.pixels.foreach_get(buff[buff.shape[0]//2:].ravel())
+                imageResult.pixels.foreach_set(buff.ravel())
             bpy.data.images.remove(imageResult1)
             bpy.data.images.remove(imageResult2)
            
