@@ -1,4 +1,6 @@
 # eeVR
+**This project is not currently in active development, you're still free to post issues and make pull requests and I will try my best to guide you/merge, even if you have to wait a while. I do plan on coming back to this, although that won't happen for probably a year or two.**
+
 Blender addon to render 360° and 180° images and videos in eevee engine with support for stereoscopic rendering.
 
 ## Getting Started
