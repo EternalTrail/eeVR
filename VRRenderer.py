@@ -229,6 +229,17 @@ frag_shaders = {
 '''
 }
 
+output_format_config = {
+    "PNG":{
+        "suffix":".png",
+        "format":"PNG"
+    },
+    "JPEG":{
+        "suffix":".jpg",
+        "format":"JPEG"
+    }
+}
+
 class VRRenderer:
     
     def __init__(self, is_stereo = False, is_animation = False, mode = 'EQUI', FOV = 180, folder = ''):
@@ -507,14 +518,16 @@ class VRRenderer:
     
     def render_image(self, direction):
         
+        file_suffix  = output_format_config[bpy.context.scene.render.image_settings.file_format]["suffix"]
+
         # Render the image and load it into the script
         tmp = self.scene.render.filepath
-        self.scene.render.filepath = self.path + 'temp_img_store_'+direction+'.png'
+        self.scene.render.filepath = self.path + 'temp_img_store_'+direction + file_suffix
         
         # If rendering for VR, render the side images separately to avoid seams
         if self.is_stereo and direction in {'right', 'left'}:
-            imageL = 'temp_img_store_'+direction+'_L.png'
-            imageR = 'temp_img_store_'+direction+'_R.png'
+            imageL = 'temp_img_store_'+direction+'_L' + file_suffix
+            imageR = 'temp_img_store_'+direction+'_R' + file_suffix
             if imageL in bpy.data.images:
                 bpy.data.images.remove(bpy.data.images[imageL])
             if imageR in bpy.data.images:
@@ -550,9 +563,9 @@ class VRRenderer:
         
         elif self.is_stereo:
             bpy.ops.render.render(write_still=True)
-            image_name = 'temp_img_store_'+direction+'.png'
-            imageL = 'temp_img_store_'+direction+'_L.png'
-            imageR = 'temp_img_store_'+direction+'_R.png'
+            image_name = 'temp_img_store_'+direction + file_suffix
+            imageL = 'temp_img_store_'+direction+'_L' + file_suffix
+            imageR = 'temp_img_store_'+direction+'_R' + file_suffix
             if image_name in bpy.data.images:
                 bpy.data.images.remove(bpy.data.images[image_name])
             if imageL in bpy.data.images:
@@ -583,15 +596,15 @@ class VRRenderer:
             renderedImageL.pack()
             renderedImageR.pack()
             bpy.data.images.remove(renderedImage)
-            self.createdFiles.add(self.path + 'temp_img_store_'+direction+'.png')
+            self.createdFiles.add(self.path + 'temp_img_store_'+direction + file_suffix)
         else:
             bpy.ops.render.render(write_still=True)
-            image_name = 'temp_img_store_'+direction+'.png'
+            image_name = 'temp_img_store_'+direction+file_suffix
             if image_name in bpy.data.images:
                 bpy.data.images.remove(bpy.data.images[image_name])
             renderedImageL = bpy.data.images.load(self.path + image_name)
             renderedImageR = None
-            self.createdFiles.add(self.path + 'temp_img_store_'+direction+'.png')
+            self.createdFiles.add(self.path + 'temp_img_store_'+direction + file_suffix)
         
         self.scene.render.filepath = tmp
         return renderedImageL, renderedImageR
@@ -624,7 +637,11 @@ class VRRenderer:
    
    
     def render_and_save(self):
-               
+        
+        
+        file_suffix  = output_format_config[bpy.context.scene.render.image_settings.file_format]["suffix"]
+        file_format  = output_format_config[bpy.context.scene.render.image_settings.file_format]["format"]
+
         # Set the render resolution dimensions to the maximum of the two input dimensions
         self.scene.render.resolution_x = self.side_resolution
         self.scene.render.resolution_y = self.side_resolution
@@ -637,9 +654,9 @@ class VRRenderer:
         # Render the images and return their names
         imageList, imageList2 = self.render_images()
         if self.is_animation:
-            image_name = "frame{:06d}.png".format(self.scene.frame_current)
+            image_name = ("frame{:06d}" + file_suffix).format(self.scene.frame_current)
         else:
-            image_name = "Render Result {}.png".format(self.start_time)
+            image_name = ("Render Result {}" + file_suffix).format(self.start_time)
        
         # Convert the rendered images to equirectangular projection image and save it to the disk
         if self.is_stereo:
@@ -672,12 +689,12 @@ class VRRenderer:
         
         if self.is_animation:
             # Color Management Settings issue solved by nagadomi
-            imageResult.file_format = 'PNG'
+            imageResult.file_format = file_format
             imageResult.filepath_raw = self.path+self.folder_name+image_name            
             imageResult.save()
             self.scene.frame_set(self.scene.frame_current+frame_step)
         else:
-            imageResult.file_format = 'PNG'
+            imageResult.file_format = file_format
             imageResult.filepath_raw = self.path+image_name
             imageResult.save()
         
