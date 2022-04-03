@@ -21,8 +21,11 @@ frag_shaders = {
     uniform sampler2D cubeBottomImage;
     uniform sampler2D cubeTopImage;
     uniform sampler2D cubeFrontImage;
+    
     in vec2 vTexCoord;
+    
     out vec4 fragColor;
+    
     void main() {{
     
         // Calculate the pointing angle
@@ -67,8 +70,11 @@ frag_shaders = {
     uniform sampler2D cubeTopImage;
     uniform sampler2D cubeBackImage;
     uniform sampler2D cubeFrontImage;
+    
     in vec2 vTexCoord;
+    
     out vec4 fragColor;
+    
     void main() {{
     
         // Calculate the pointing angle
@@ -113,14 +119,18 @@ frag_shaders = {
     uniform sampler2D cubeBottomImage;
     uniform sampler2D cubeTopImage;
     uniform sampler2D cubeFrontImage;
+    
     in vec2 vTexCoord;
+    
     out vec4 fragColor;
+    
     void main() {{
         float fovd = {0};
         int domeMode = {1};
         float fovfrac = fovd/360.0;
         float sidefrac = (fovd-90.0)/180;
         vec2 d = vTexCoord.xy;
+        
         float r = length(d);
         if( r > 1.0 ) {{
             fragColor = vec4(0.0, 0.0, 0.0, 1.0);
@@ -136,6 +146,7 @@ frag_shaders = {
         if(domeMode == 2) pt.xy = 2.0 * dunit * sin(phi / 2.0);
         if(domeMode == 3) pt.xy = 2.0 * dunit * tan(phi / 2.0);
         pt.z = cos(phi);
+        
         // Select the correct pixel
         if ((abs(pt.x) >= abs(pt.y)) && (abs(pt.x) >= abs(pt.z))) {{
             if (pt.x <= 0.0) {{
@@ -165,12 +176,17 @@ frag_shaders = {
     uniform sampler2D cubeTopImage;
     uniform sampler2D cubeFrontImage;
     uniform sampler2D cubeBackImage;
+    
     in vec2 vTexCoord;
+    
     out vec4 fragColor;
+    
     void main() {{
+    
         float fovfrac = {0}/360.0;
         int domeMode = {1};
         vec2 d = vTexCoord.xy;
+        
         float r = length(d);
         if( r > 1.0 ) {{
             fragColor = vec4(0.0, 0.0, 0.0, 1.0);
@@ -346,7 +362,9 @@ class VRRenderer:
         vertex_shader = '''
             in vec3 aVertexPosition;
             in vec2 aVertexTextureCoord;
+            
             out vec2 vTexCoord;
+            
             void main() {
                 vTexCoord = aVertexTextureCoord;
                 gl_Position = vec4(aVertexPosition, 1);
@@ -635,7 +653,7 @@ class VRRenderer:
         self.scene.render.resolution_x = self.side_resolution
         self.scene.render.resolution_y = self.side_resolution
         self.camera.data.shift_x = 0
-        self.camera.data.shift_y = 0       
+        self.camera.data.shift_y = 0
        
         frame_step = self.scene.frame_step
        
