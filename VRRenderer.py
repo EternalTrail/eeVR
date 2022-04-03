@@ -8,6 +8,7 @@ from bpy.types import Operator, Panel
 from math import sin, cos, pi
 from datetime import datetime
 from gpu_extras.batch import batch_for_shader
+import time
 
 frag_shaders = {
 # Define the fragment shader for the 180-270 degree equirectangular conversion
@@ -20,11 +21,8 @@ frag_shaders = {
     uniform sampler2D cubeBottomImage;
     uniform sampler2D cubeTopImage;
     uniform sampler2D cubeFrontImage;
-
     in vec2 vTexCoord;
-
     out vec4 fragColor;
-
     void main() {{
     
         // Calculate the pointing angle
@@ -69,11 +67,8 @@ frag_shaders = {
     uniform sampler2D cubeTopImage;
     uniform sampler2D cubeBackImage;
     uniform sampler2D cubeFrontImage;
-
     in vec2 vTexCoord;
-
     out vec4 fragColor;
-
     void main() {{
     
         // Calculate the pointing angle
@@ -118,19 +113,14 @@ frag_shaders = {
     uniform sampler2D cubeBottomImage;
     uniform sampler2D cubeTopImage;
     uniform sampler2D cubeFrontImage;
-
     in vec2 vTexCoord;
-
     out vec4 fragColor;
-
     void main() {{
-
         float fovd = {0};
         int domeMode = {1};
         float fovfrac = fovd/360.0;
         float sidefrac = (fovd-90.0)/180;
         vec2 d = vTexCoord.xy;
-
         float r = length(d);
         if( r > 1.0 ) {{
             fragColor = vec4(0.0, 0.0, 0.0, 1.0);
@@ -146,7 +136,6 @@ frag_shaders = {
         if(domeMode == 2) pt.xy = 2.0 * dunit * sin(phi / 2.0);
         if(domeMode == 3) pt.xy = 2.0 * dunit * tan(phi / 2.0);
         pt.z = cos(phi);
-
         // Select the correct pixel
         if ((abs(pt.x) >= abs(pt.y)) && (abs(pt.x) >= abs(pt.z))) {{
             if (pt.x <= 0.0) {{
@@ -176,17 +165,12 @@ frag_shaders = {
     uniform sampler2D cubeTopImage;
     uniform sampler2D cubeFrontImage;
     uniform sampler2D cubeBackImage;
-
     in vec2 vTexCoord;
-
     out vec4 fragColor;
-
     void main() {{
-
         float fovfrac = {0}/360.0;
         int domeMode = {1};
         vec2 d = vTexCoord.xy;
-
         float r = length(d);
         if( r > 1.0 ) {{
             fragColor = vec4(0.0, 0.0, 0.0, 1.0);
@@ -202,7 +186,6 @@ frag_shaders = {
         if(domeMode == 2) pt.xy = 2.0 * dunit * sin(phi / 2.0);
         if(domeMode == 3) pt.xy = 2.0 * dunit * tan(phi / 2.0);
         pt.z = cos(phi); 
-
         
         // Select the correct pixel
         if ((abs(pt.x) >= abs(pt.y)) && (abs(pt.x) >= abs(pt.z))) {{
@@ -228,7 +211,8 @@ frag_shaders = {
 '''
 }
 
-# @ bkurdali:master # https://github.com/EternalTrail/eeVR/pull/37/commits/fe691bf3f02a67829b7f52ba017f1bb384bd71e2
+# bkurdali:master
+# https://github.com/EternalTrail/eeVR/pull/37/commits/fe691bf3f02a67829b7f52ba017f1bb384bd71e2
 output_format_config = {
     "PNG":{
         "suffix":".png",
@@ -269,10 +253,11 @@ class VRRenderer:
         self.camera.matrix_world = self.camera_origin.matrix_world
         # transfer key attributes that may affect rendering, conv dis not needed 'cause it is parallel
         self.camera.data.stereo.interocular_distance = self.camera_origin.data.stereo.interocular_distance
+        ##### newly edited codes end
         # copy clipping distances from original camera:
         self.camera.data.clip_start = self.camera_origin.data.clip_start
         self.camera.data.clip_end = self.camera_origin.data.clip_end
-        ##### newly edited codes end
+        #
         self.path = bpy.path.abspath("//")
         self.is_stereo = is_stereo
         self.is_animation = is_animation
@@ -361,9 +346,7 @@ class VRRenderer:
         vertex_shader = '''
             in vec3 aVertexPosition;
             in vec2 aVertexTextureCoord;
-
             out vec2 vTexCoord;
-
             void main() {
                 vTexCoord = aVertexTextureCoord;
                 gl_Position = vec4(aVertexPosition, 1);
@@ -450,7 +433,7 @@ class VRRenderer:
             bpy.data.images.new(outputName, width, height)
         imageRes = bpy.data.images[outputName]
         imageRes.scale(width, height)
-        imageRes.pixels = buffer
+        imageRes.pixels.foreach_set(buffer)
         return imageRes
 
     
@@ -495,11 +478,9 @@ class VRRenderer:
         if self.no_back_image:
             self.camera.data.shift_x = self.camera_shift[direction][0]
             self.camera.data.shift_y = self.camera_shift[direction][1]
-            self.scene.render.resolution_x = self.camera_shift[direction][2]
-            self.scene.render.resolution_y = self.camera_shift[direction][3]
-            #https://github.com/EternalTrail/eeVR/pull/38/commits/f7a520f03190c4a2d6d479f0009322592f281cab
             self.scene.render.resolution_x = int(self.camera_shift[direction][2])
             self.scene.render.resolution_y = int(self.camera_shift[direction][3])
+        
 
     def clean_up(self):
         
@@ -526,7 +507,7 @@ class VRRenderer:
     
     
     def render_image(self, direction):
-        # https://github.com/EternalTrail/eeVR/pull/37/commits/fe691bf3f02a67829b7f52ba017f1bb384bd71e2
+        
         file_suffix  = output_format_config[bpy.context.scene.render.image_settings.file_format]["suffix"]
         
         # Render the image and load it into the script
@@ -594,12 +575,14 @@ class VRRenderer:
                 renderedImageR = bpy.data.images.new(imageR, self.side_resolution, self.side_resolution)
             
             # Split the render into two images
+            buff = np.empty((imageLen,), dtype=np.float32)
+            renderedImage.pixels.foreach_get(buff)
             if direction == 'back':
-                renderedImageL.pixels = renderedImage.pixels[int(imageLen/2):]
-                renderedImageR.pixels = renderedImage.pixels[0:int(imageLen/2)]
+                renderedImageL.pixels.foreach_set(buff[imageLen//2:])
+                renderedImageR.pixels.foreach_set(buff[:imageLen//2])
             else:
-                renderedImageR.pixels = renderedImage.pixels[int(imageLen/2):]
-                renderedImageL.pixels = renderedImage.pixels[0:int(imageLen/2)]
+                renderedImageR.pixels.foreach_set(buff[imageLen//2:])
+                renderedImageL.pixels.foreach_set(buff[:imageLen//2])
             renderedImageL.pack()
             renderedImageR.pack()
             bpy.data.images.remove(renderedImage)
@@ -644,16 +627,15 @@ class VRRenderer:
    
    
     def render_and_save(self):
-               
+        
         file_suffix  = output_format_config[bpy.context.scene.render.image_settings.file_format]["suffix"]
         file_format  = output_format_config[bpy.context.scene.render.image_settings.file_format]["format"]
-        
+               
         # Set the render resolution dimensions to the maximum of the two input dimensions
         self.scene.render.resolution_x = self.side_resolution
         self.scene.render.resolution_y = self.side_resolution
         self.camera.data.shift_x = 0
-        self.camera.data.shift_y = 0
-       
+        self.camera.data.shift_y = 0       
        
         frame_step = self.scene.frame_step
        
@@ -676,12 +658,17 @@ class VRRenderer:
             imageResult = bpy.data.images[image_name]
             if self.stereo_mode == 'SIDEBYSIDE':
                 imageResult.scale(2*imageResult1.size[0], imageResult1.size[1])
-                img2arr = np.reshape(np.array(imageResult2.pixels),(imageResult2.size[1], 4*imageResult2.size[0]))
-                img1arr = np.reshape(np.array(imageResult1.pixels),(imageResult1.size[1], 4*imageResult1.size[0]))
-                imageResult.pixels = list(np.concatenate((img2arr, img1arr),axis=1).flatten())
+                img2arr = np.empty((imageResult2.size[1], 4 * imageResult2.size[0]), dtype=np.float32)
+                imageResult2.pixels.foreach_get(img2arr.ravel())
+                img1arr = np.empty((imageResult1.size[1], 4 * imageResult1.size[0]), dtype=np.float32)
+                imageResult1.pixels.foreach_get(img1arr.ravel())
+                imageResult.pixels.foreach_set(np.concatenate((img2arr, img1arr), axis=1).ravel())
             else:
                 imageResult.scale(imageResult1.size[0], 2*imageResult1.size[1])
-                imageResult.pixels = list(imageResult2.pixels) + list(imageResult1.pixels)
+                buff = np.empty((imageResult1.size[0] * 2 * imageResult1.size[1] * 4,), dtype=np.float32)
+                imageResult2.pixels.foreach_get(buff[:buff.shape[0]//2].ravel())
+                imageResult1.pixels.foreach_get(buff[buff.shape[0]//2:].ravel())
+                imageResult.pixels.foreach_set(buff.ravel())
             bpy.data.images.remove(imageResult1)
             bpy.data.images.remove(imageResult2)
            
@@ -725,7 +712,9 @@ class RenderImage(Operator):
         mode = bpy.context.scene.renderModeEnum
         FOV = bpy.context.scene.renderFOV
         renderer = VRRenderer(bpy.context.scene.render.use_multiview, False, mode, FOV)
+        now = time.time()
         renderer.render_and_save() 
+        print("VRRenderer: {} seconds".format(round(time.time() - now, 2)))
         renderer.clean_up() 
         
         return {'FINISHED'}
@@ -755,7 +744,9 @@ class RenderAnimation(Operator):
            
             if bpy.context.scene.frame_current <= self.frame_end:
                 print("VRRenderer: Rendering frame {}".format(bpy.context.scene.frame_current))
+                now = time.time()
                 self._renderer.render_and_save()
+                print("VRRenderer: {} seconds".format(round(time.time() - now, 2)))
                 self._timer = wm.event_timer_add(0.1, window=context.window)
             else:
                 self.clean(context)
