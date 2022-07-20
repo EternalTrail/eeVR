@@ -511,8 +511,8 @@ class VRRenderer:
         if self.no_back_image:
             self.camera.data.shift_x = self.camera_shift[direction][0]
             self.camera.data.shift_y = self.camera_shift[direction][1]
-            self.scene.render.resolution_x = self.camera_shift[direction][2]
-            self.scene.render.resolution_y = self.camera_shift[direction][3]
+            self.scene.render.resolution_x = int(self.camera_shift[direction][2])
+            self.scene.render.resolution_y = int(self.camera_shift[direction][3])
         
 
     def clean_up(self):
