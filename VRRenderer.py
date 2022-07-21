@@ -687,7 +687,7 @@ class VRRenderer:
 class VRRendererCancel(Operator):
     """Render out the animation"""
    
-    bl_idname = 'wl.render_cancel'
+    bl_idname = 'eevr.render_cancel'
     bl_label = "Cancel the render"
  
     def execute(self, context):
@@ -698,7 +698,7 @@ class VRRendererCancel(Operator):
 class RenderImage(Operator):
     """Render out the animation"""
    
-    bl_idname = 'wl.render_image'
+    bl_idname = 'eevr.render_image'
     bl_label = "Render a single frame"
     
     def execute(self, context):
@@ -718,7 +718,7 @@ class RenderImage(Operator):
 class RenderAnimation(Operator):
     """Render out the animation"""
    
-    bl_idname = 'wl.render_animation'
+    bl_idname = 'eevr.render_animation'
     bl_label = "Render the animation"
    
     def __del__(self):
@@ -799,8 +799,8 @@ class RenderToolsPanel(Panel):
         if context.scene.eeVR.renderModeEnum == 'DOME':
             col.prop(context.scene.eeVR, 'domeModeEnum')
         col.prop(context.scene.eeVR, 'renderFOV')
-        col.operator("wl.render_image", text="Render Image")
-        col.operator("wl.render_animation", text="Render Animation")
+        col.operator(RenderImage.bl_idname, text="Render Image")
+        col.operator(RenderAnimation.bl_idname, text="Render Animation")
         if not context.scene.eeVR.cancelVRRenderer:
-            col.operator("wl.render_cancel", text="Cancel")
+            col.operator(VRRendererCancel.bl_idname, text="Cancel")
             col.label(text="Rendering frame {}".format(bpy.context.scene.frame_current))
