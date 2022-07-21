@@ -17,27 +17,27 @@ uniform sampler2D cubeBottomImage;
 uniform sampler2D cubeTopImage;
 uniform sampler2D cubeBackImage;
 uniform sampler2D cubeFrontImage;
-'''
-
-dome = '''
 
 in vec2 vTexCoord;
 
 out vec4 fragColor;
 
+'''
+
+dome = '''
 void main() {{
 
     vec2 d = vTexCoord.xy;
     float r = length(d);
     if( r > 1.0 ) discard;
 
-    float fovfrac = {0}/360.0;
-    float sidefrac = min(1.0, ({0}-90.0)/180.0);
+    float hfovfrac = {0};
+    float sidefrac = {1};
     
     vec2 dunit = normalize(d);
-    float phi = fovfrac*r*PI;
+    float phi = hfovfrac*r*PI;
     vec3 pt;
-    {1}
+    {2}
     pt.z = cos(phi);
 
     // Select the correct pixel
@@ -53,17 +53,12 @@ domemodes = [
 ]
 
 equi = '''
-
-in vec2 vTexCoord;
-
-out vec4 fragColor;
-
 void main() {{
 
     // Calculate the pointing angle
-    float fovfrac = {0}/360.0;
-    float sidefrac = min(1.0, ({0}-90.0)/180.0);
-    float azimuth = vTexCoord.x * PI * fovfrac;
+    float hfovfrac = {0};
+    float sidefrac = {1};
+    float azimuth = vTexCoord.x * PI * hfovfrac;
     float elevation = vTexCoord.y * PI / 2.0;
     
     // Calculate the pointing vector
@@ -135,7 +130,6 @@ class Renderer:
         self.no_back_image = (self.HFOV <= 270)
         self.no_side_images = (self.HFOV <= 90)
         self.no_top_bottom_images = (self.VFOV <= 90)
-        print('caaaaa', self.HFOV, self.VFOV, self.scene.render.resolution_percentage)
         self.is_dome = (mode == 'DOME')
         self.domeMode = bpy.context.scene.eeVR.domeModeEnum
         self.createdFiles = set()
@@ -155,12 +149,12 @@ class Renderer:
             self.frag_shader += fetch_front_back
         if self.is_dome:
             # Insert the FOV and Mode  into the shader
-            self.frag_shader = self.frag_shader.format(self.HFOV, domemodes[int(self.domeMode)])
+            self.frag_shader = self.frag_shader.format(
+                self.HFOV / 360.0, min(1.0, (self.HFOV - 90.0) / 180.0), domemodes[int(self.domeMode)]
+            )
         else:
             # Insert the FOV into the shader
-            self.frag_shader = self.frag_shader.format(self.HFOV)
-
-        print(self.frag_shader)
+            self.frag_shader = self.frag_shader.format(self.HFOV / 360.0, min(1.0, (self.HFOV - 90.0) / 180.0))
         
         # Set the image name to the current time
         self.start_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
@@ -195,7 +189,8 @@ class Renderer:
         self.camera.data.stereo.pivot = 'CENTER'
         self.camera.data.angle = pi/2
         
-        self.image_size = (self.scene.render.resolution_x, self.scene.render.resolution_y, self.scene.render.resolution_percentage)
+        self.image_size = (self.scene.render.resolution_x, self.scene.render.resolution_y)
+        self.org_resolution_percentage = self.scene.render.resolution_percentage
         
         self.side_resolution = int(max(self.image_size)+4-max(self.image_size)%4)/2 if max(self.image_size)%4 > 0\
                                else int(max(self.image_size)/2)
@@ -388,7 +383,7 @@ class Renderer:
         ##### newly edited codes end
         self.scene.render.resolution_x = self.image_size[0]
         self.scene.render.resolution_y = self.image_size[1]
-        self.scene.render.resolution_percentage = self.image_size[2]
+        self.scene.render.resolution_percentage = self.org_resolution_percentage
         if self.is_stereo:
             self.scene.render.image_settings.views_format = self.view_format
             self.scene.render.image_settings.stereo_3d_format.display_mode = self.stereo_mode
@@ -494,20 +489,23 @@ class Renderer:
         image_list_1 = []
         image_list_2 = []
         
+        directions = ['front']
+        if not self.no_side_images:
+            directions += ['left', 'right']
+        if not self.no_top_bottom_images:
+            directions += ['bottom', 'top']
+        if not self.no_back_image:
+            directions += ['back']
+
         self.direction_offsets = self.find_direction_offsets()
         #self.camera_empty.location = self.camera.location
         #self.camera_empty.rotation_euler = self.camera.rotation_euler
         #self.trans_constraint.target = self.camera_empty
-        for direction in ['front', 'left', 'right', 'bottom', 'top', 'back']:
-            if (direction == 'back' and self.no_back_image) \
-            or ((direction == 'left' or direction == 'right') and self.no_side_images) \
-            or ((direction == 'bottom' or direction == 'top') and self.no_top_bottom_images):
-                continue
-            else:
-                self.set_camera_direction(direction)
-                img1, img2 = self.render_image(direction)
-                image_list_1.append(img1)
-                image_list_2.append(img2)
+        for direction in reversed(directions): # I want the results of the front camera to remain in the render window... just that.
+            self.set_camera_direction(direction)
+            img1, img2 = self.render_image(direction)
+            image_list_1.insert(0, img1)
+            image_list_2.insert(0, img2)
         
         self.set_camera_direction('front')
         #self.trans_constraint.target = None

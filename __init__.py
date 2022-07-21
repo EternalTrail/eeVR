@@ -31,17 +31,6 @@ bl_info = {
     "category": "Render",
 }
 
-class Cancel(Operator):
-    """Render out the animation"""
-
-    bl_idname = 'eevr.render_cancel'
-    bl_label = "Cancel the render"
-
-    def execute(self, context):
-        context.scene.eeVR.cancel = True
-        return {'FINISHED'}
-
-
 class RenderImage(Operator):
     """Render out the animation"""
 
@@ -130,6 +119,17 @@ class RenderAnimation(Operator):
     def clean(self, context):
         self._renderer.clean_up()
         context.scene.eeVR.cancel = True
+
+
+class Cancel(Operator):
+    """Render out the animation"""
+
+    bl_idname = 'eevr.render_cancel'
+    bl_label = "Cancel the render"
+
+    def execute(self, context):
+        context.scene.eeVR.cancel = True
+        return {'FINISHED'}
 
 
 class RenderToolsPanel(Panel):
