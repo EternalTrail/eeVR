@@ -394,17 +394,18 @@ class Renderer:
     def render_image(self, direction):
         
         # Render the image and load it into the script
+        name = f'temp_img_store_{direction}'
+        if self.is_stereo:
+            nameL = name + '_L'
+            nameR = name + '_R'
         tmp = self.scene.render.filepath
-        self.scene.render.filepath = self.path + 'temp_img_store_'+direction+'.png'
         
         # If rendering for VR, render the side images separately to avoid seams
         if self.is_stereo and direction in {'right', 'left'}:
-            imageL = 'temp_img_store_'+direction+'_L.png'
-            imageR = 'temp_img_store_'+direction+'_R.png'
-            if imageL in bpy.data.images:
-                bpy.data.images.remove(bpy.data.images[imageL])
-            if imageR in bpy.data.images:
-                bpy.data.images.remove(bpy.data.images[imageR])
+            if nameL in bpy.data.images:
+                bpy.data.images.remove(bpy.data.images[nameL])
+            if nameR in bpy.data.images:
+                bpy.data.images.remove(bpy.data.images[nameR])
             
             self.scene.render.use_multiview = False
             #tmp_loc = list(self.camera_empty.location)
@@ -416,9 +417,12 @@ class Renderer:
             self.camera.location = [tmp_loc[0]+(0.5*self.IPD*cos(camera_angle)),\
                                     tmp_loc[1]+(0.5*self.IPD*sin(camera_angle)),\
                                     tmp_loc[2]]
-            self.scene.render.filepath = self.path + imageL
+
+            self.scene.render.filepath = self.path + nameL + '.png'
             bpy.ops.render.render(write_still=True)
-            renderedImageL = bpy.data.images.load(self.path + imageL)
+            self.createdFiles.add(self.scene.render.filepath)
+            renderedImageL = bpy.data.images.load(self.scene.render.filepath)
+            renderedImageL.name = nameL
             
             #self.camera_empty.location = [tmp_loc[0]-(0.5*self.IPD*cos(camera_angle)),\
             #                        tmp_loc[1]-(0.5*self.IPD*sin(camera_angle)),\
@@ -426,36 +430,38 @@ class Renderer:
             self.camera.location = [tmp_loc[0]-(0.5*self.IPD*cos(camera_angle)),\
                                     tmp_loc[1]-(0.5*self.IPD*sin(camera_angle)),\
                                     tmp_loc[2]]
-            self.scene.render.filepath = self.path + imageR
+
+            self.scene.render.filepath = self.path + nameR + '.png'
             bpy.ops.render.render(write_still=True)
-            renderedImageR = bpy.data.images.load(self.path + imageR)
+            self.createdFiles.add(self.scene.render.filepath)
+            renderedImageR = bpy.data.images.load(self.scene.render.filepath)
+            renderedImageR.name = nameR
+
             self.scene.render.use_multiview = True
-            self.createdFiles.update({self.path+imageR, self.path+imageL})
             #self.camera_empty.location = tmp_loc
             self.camera.location = tmp_loc
         
         elif self.is_stereo:
+            if name in bpy.data.images:
+                bpy.data.images.remove(bpy.data.images[name])
+            if nameL in bpy.data.images:
+                bpy.data.images.remove(bpy.data.images[nameL])
+            if nameR in bpy.data.images:
+                bpy.data.images.remove(bpy.data.images[nameR])
+
+            self.scene.render.filepath = self.path + name + '.png'
             bpy.ops.render.render(write_still=True)
-            image_name = 'temp_img_store_'+direction+'.png'
-            imageL = 'temp_img_store_'+direction+'_L.png'
-            imageR = 'temp_img_store_'+direction+'_R.png'
-            if image_name in bpy.data.images:
-                bpy.data.images.remove(bpy.data.images[image_name])
-            if imageL in bpy.data.images:
-                bpy.data.images.remove(bpy.data.images[imageL])
-            if imageR in bpy.data.images:
-                bpy.data.images.remove(bpy.data.images[imageR])
-            renderedImage =  bpy.data.images.load(self.path + image_name)
+            self.createdFiles.add(self.scene.render.filepath)
+            renderedImage =  bpy.data.images.load(self.scene.render.filepath)
+            renderedImage.name = name
             renderedImage.colorspace_settings.name='Linear'
             imageLen = len(renderedImage.pixels)
             if self.no_back_image and direction in {'top', 'bottom'}:
-                renderedImageL = bpy.data.images.new(imageL, self.side_resolution,\
-                                                     int(self.side_resolution/2))
-                renderedImageR = bpy.data.images.new(imageR, self.side_resolution,\
-                                                     int(self.side_resolution/2))
+                renderedImageL = bpy.data.images.new(nameL, self.side_resolution, int(self.side_resolution/2))
+                renderedImageR = bpy.data.images.new(nameR, self.side_resolution, int(self.side_resolution/2))
             else:
-                renderedImageL = bpy.data.images.new(imageL, self.side_resolution, self.side_resolution)
-                renderedImageR = bpy.data.images.new(imageR, self.side_resolution, self.side_resolution)
+                renderedImageL = bpy.data.images.new(nameL, self.side_resolution, self.side_resolution)
+                renderedImageR = bpy.data.images.new(nameR, self.side_resolution, self.side_resolution)
             
             # Split the render into two images
             buff = np.empty((imageLen,), dtype=np.float32)
@@ -469,15 +475,16 @@ class Renderer:
             renderedImageL.pack()
             renderedImageR.pack()
             bpy.data.images.remove(renderedImage)
-            self.createdFiles.add(self.path + 'temp_img_store_'+direction+'.png')
         else:
+            if name in bpy.data.images:
+                bpy.data.images.remove(bpy.data.images[name])
+
+            self.scene.render.filepath = self.path + name + '.png'
             bpy.ops.render.render(write_still=True)
-            image_name = 'temp_img_store_'+direction+'.png'
-            if image_name in bpy.data.images:
-                bpy.data.images.remove(bpy.data.images[image_name])
-            renderedImageL = bpy.data.images.load(self.path + image_name)
+            self.createdFiles.add(self.scene.render.filepath)
+            renderedImageL = bpy.data.images.load(self.scene.render.filepath)
+            renderedImageL.name = name
             renderedImageR = None
-            self.createdFiles.add(self.path + 'temp_img_store_'+direction+'.png')
         
         self.scene.render.filepath = tmp
         return renderedImageL, renderedImageR
@@ -527,9 +534,9 @@ class Renderer:
         # Render the images and return their names
         imageList, imageList2 = self.render_images()
         if self.is_animation:
-            image_name = "frame{:06d}.png".format(self.scene.frame_current)
+            image_name = f"frame{self.scene.frame_current:06d}.png"
         else:
-            image_name = "Render Result {}.png".format(self.start_time)
+            image_name = f"Render Result {self.start_time}.png"
         
         # Convert the rendered images to equirectangular projection image and save it to the disk
         if self.is_stereo:
