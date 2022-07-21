@@ -38,16 +38,15 @@ class RenderImage(Operator):
     bl_label = "Render a single frame"
 
     def execute(self, context):
-        print("VRRenderer: execute")
+        print("eeVR: execute")
 
-        mode = bpy.context.scene.eeVR.renderModeEnum
-        HFOV = bpy.context.scene.eeVR.renderHFOV
-        VFOV = bpy.context.scene.eeVR.renderVFOV
-        renderer = Renderer(
-            bpy.context.scene.render.use_multiview, False, mode, HFOV, VFOV)
+        mode = context.scene.eeVR.renderModeEnum
+        HFOV = context.scene.eeVR.renderHFOV
+        VFOV = context.scene.eeVR.renderVFOV
+        renderer = Renderer(context.scene.render.use_multiview, False, mode, HFOV, VFOV)
         now = time.time()
         renderer.render_and_save()
-        print("VRRenderer: {} seconds".format(round(time.time() - now, 2)))
+        print("eeVR: {} seconds".format(round(time.time() - now, 2)))
         renderer.clean_up()
 
         return {'FINISHED'}
@@ -60,7 +59,7 @@ class RenderAnimation(Operator):
     bl_label = "Render the animation"
 
     def __del__(self):
-        print("VRRenderer: end")
+        print("eeVR: end")
 
     def modal(self, context, event):
         if event.type in {'ESC'}:
@@ -76,12 +75,10 @@ class RenderAnimation(Operator):
                 return {'CANCELLED'}
 
             if bpy.context.scene.frame_current <= self.frame_end:
-                print("VRRenderer: Rendering frame {}".format(
-                    bpy.context.scene.frame_current))
+                print("eeVR: Rendering frame {}".format(bpy.context.scene.frame_current))
                 now = time.time()
                 self._renderer.render_and_save()
-                print("VRRenderer: {} seconds".format(
-                    round(time.time() - now, 2)))
+                print("eeVR: {} seconds".format(round(time.time() - now, 2)))
                 self._timer = wm.event_timer_add(0.1, window=context.window)
             else:
                 self.clean(context)
@@ -90,34 +87,34 @@ class RenderAnimation(Operator):
         return {'PASS_THROUGH'}
 
     def execute(self, context):
-        print("VRRenderer: execute")
+        print("eeVR: execute")
 
         context.scene.eeVR.cancel = False
 
-        mode = bpy.context.scene.eeVR.renderModeEnum
-        HFOV = bpy.context.scene.eeVR.renderHFOV
-        VFOV = bpy.context.scene.eeVR.renderVFOV
+        mode = context.scene.eeVR.renderModeEnum
+        HFOV = context.scene.eeVR.renderHFOV
+        VFOV = context.scene.eeVR.renderVFOV
         # knowing it's animation, creates folder outside vrrender class, pass folder name to it
         start_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
         folder_name = "Render Result {}/".format(start_time)
         path = bpy.path.abspath("//")
         os.makedirs(path+folder_name, exist_ok=True)
-        self._renderer = Renderer(bpy.context.scene.render.use_multiview, True, mode, HFOV, VFOV, folder_name)
+        self.renderer = Renderer(context.scene.render.use_multiview, True, mode, HFOV, VFOV, folder_name)
 
-        self.frame_end = bpy.context.scene.frame_end
-        frame_start = bpy.context.scene.frame_start
-        bpy.context.scene.frame_set(frame_start)
+        self.frame_end = context.scene.frame_end
+        frame_start = context.scene.frame_start
+        context.scene.frame_set(frame_start)
         wm = context.window_manager
         self._timer = wm.event_timer_add(5, window=context.window)
         wm.modal_handler_add(self)
         return {'RUNNING_MODAL'}
 
     def cancel(self, context):
-        print("VRRenderer: cancel")
+        print("eeVR: cancel")
         self.clean(context)
 
     def clean(self, context):
-        self._renderer.clean_up()
+        self.renderer.clean_up()
         context.scene.eeVR.cancel = True
 
 
