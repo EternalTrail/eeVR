@@ -284,7 +284,7 @@ frag_shader_sbs = '''
 # Original eeVR renderer
 class VRRenderer:
     
-    def __init__(self, is_stereo = False, is_animation = False, mode = 'EQUI', FOV = 180, folder = ''):
+    def __init__(self, is_stereo = False, is_animation = False, mode = 'EQUI', HFOV = 180, VFOV = 180, folder = ''):
         
         # Check if the file is saved or not, can cause errors when not saved
         if not bpy.data.is_saved:
@@ -313,11 +313,12 @@ class VRRenderer:
         self.path = bpy.path.abspath("//")
         self.is_stereo = is_stereo
         self.is_animation = is_animation
-        self.FOV = FOV
-        self.no_back_image = (self.FOV <= 270)
-        self.no_side_images = (self.FOV <= 90) # TODO - Not implemented yet, probably not needed
+        self.HFOV = min(max(HFOV, 1), 360)
+        self.VFOV = min(max(VFOV, 1), 180)
+        self.no_back_image = (self.HFOV <= 270)
+        self.no_side_images = (self.HFOV <= 90) # TODO - Not implemented yet, probably not needed
         self.is_dome = (mode == 'DOME')
-        self.domeMode = bpy.context.scene.domeModeEnum
+        self.domeMode = bpy.context.scene.eeVR.domeModeEnum
         self.createdFiles = set()
         
         # Select the correct shader
@@ -374,7 +375,7 @@ class VRRenderer:
                                  'front':[0.0, 0.0, self.side_resolution, self.side_resolution]}
     
     
-    def cubemap_to_equirectangular(self, imageList, outputName):
+    def cubemap_to_panorama(self, imageList, outputName):
         
         # Define the vertex shader
         vertex_shader = '''
@@ -653,8 +654,8 @@ class VRRenderer:
        
         # Convert the rendered images to equirectangular projection image and save it to the disk
         if self.is_stereo:
-            imageResult1 = self.cubemap_to_equirectangular(imageList, "Render Left")
-            imageResult2 = self.cubemap_to_equirectangular(imageList2, "Render Right")
+            imageResult1 = self.cubemap_to_panorama(imageList, "Render Left")
+            imageResult2 = self.cubemap_to_panorama(imageList2, "Render Right")
            
             # If it doesn't already exist, create an image object to store the resulting render
             if not image_name in bpy.data.images.keys():
@@ -673,7 +674,7 @@ class VRRenderer:
             bpy.data.images.remove(imageResult2)
            
         else:
-            imageResult = self.cubemap_to_equirectangular(imageList, "RenderResult")
+            imageResult = self.cubemap_to_panorama(imageList, "RenderResult")
         
         if self.is_animation:
             # Color Management Settings issue solved by nagadomi
@@ -844,36 +845,37 @@ class VRRenderer_S:
 class VRRendererCancel(Operator):
     """Render out the animation"""
    
-    bl_idname = 'wl.render_cancel'
+    bl_idname = 'eevr.render_cancel'
     bl_label = "Cancel the render"
  
     def execute(self, context):
-        context.scene.cancelVRRenderer = True
+        context.scene.eeVR.cancelVRRenderer = True
         return {'FINISHED'}
 
 
 class RenderImage(Operator):
     """Render out current frame"""
    
-    bl_idname = 'wl.render_image'
+    bl_idname = 'eevr.render_image'
     bl_label = "Render a single frame"
     
     def execute(self, context):
         print("VRRenderer: execute")
        
-        mode = bpy.context.scene.renderModeEnum
-        FOV = bpy.context.scene.renderFOV
-        renderer = VRRenderer(bpy.context.scene.render.use_multiview, False, mode, FOV)
+        mode = bpy.context.scene.eeVR.renderModeEnum
+        HFOV = bpy.context.scene.eeVR.renderHFOV
+        VFOV = bpy.context.scene.eeVR.renderVFOV
+        renderer = VRRenderer(bpy.context.scene.render.use_multiview, False, mode, HFOV, VFOV)
         renderer.render_and_save() 
         renderer.clean_up() 
         
         return {'FINISHED'}
-    
+
 
 class RenderAnimation(Operator):
     """Render out the animation"""
    
-    bl_idname = 'wl.render_animation'
+    bl_idname = 'eevr.render_animation'
     bl_label = "Render the animation"
    
     def __del__(self):
@@ -888,7 +890,7 @@ class RenderAnimation(Operator):
             wm = context.window_manager
             wm.event_timer_remove(self._timer)
            
-            if context.scene.cancelVRRenderer:
+            if context.scene.eeVR.cancelVRRenderer:
                 self.cancel(context)
                 return {'CANCELLED'}
            
@@ -905,11 +907,12 @@ class RenderAnimation(Operator):
     def execute(self, context):
         print("VRRenderer: execute")
  
-        context.scene.cancelVRRenderer = False
+        context.scene.eeVR.cancelVRRenderer = False
        
-        mode = bpy.context.scene.renderModeEnum
-        FOV = bpy.context.scene.renderFOV
-        folder_name = context.scene.eeVR_folder
+        mode = bpy.context.scene.eeVR.renderModeEnum
+        HFOV = bpy.context.scene.eeVR.renderHFOV
+        VFOV = bpy.context.scene.eeVR.renderVFOV
+        folder_name = context.scene.eeVR.folder
         # Auto generate folder for animation if eeVR_folder left empty
         if folder_name == '' :
             start_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
@@ -918,7 +921,7 @@ class RenderAnimation(Operator):
             folder_name += '/'
         path = bpy.path.abspath("//")
         os.makedirs(path+folder_name, exist_ok=True)
-        self._renderer = VRRenderer(bpy.context.scene.render.use_multiview, True, mode, FOV, folder_name)
+        self._renderer = VRRenderer(bpy.context.scene.render.use_multiview, True, mode, HFOV, VFOV, folder_name)
  
         self.frame_end = bpy.context.scene.frame_end
         frame_start = bpy.context.scene.frame_start
@@ -934,13 +937,13 @@ class RenderAnimation(Operator):
        
     def clean(self, context):
         self._renderer.clean_up()
-        context.scene.cancelVRRenderer = True
+        context.scene.eeVR.cancelVRRenderer = True
 
 
 class RenderImage_S(Operator):
     """Render out current frame with simplified renderer"""
    
-    bl_idname = 'wl.render_image_simple'
+    bl_idname = 'eevr.render_image_simple'
     bl_label = "Render a single frame (simplified)"
     
     def execute(self, context):
@@ -951,10 +954,11 @@ class RenderImage_S(Operator):
         
         return {'FINISHED'}
 
+
 class RenderAnimation_S(Operator):
     """Render out the animation with simplified renderer"""
    
-    bl_idname = 'wl.render_animation_simple'
+    bl_idname = 'eevr.render_animation_simple'
     bl_label = "Render the animation (simplified)"
    
     def __del__(self):
@@ -969,7 +973,7 @@ class RenderAnimation_S(Operator):
             wm = context.window_manager
             wm.event_timer_remove(self._timer)
            
-            if context.scene.cancelVRRenderer:
+            if context.scene.eeVR.cancelVRRenderer:
                 self.cancel(context)
                 return {'CANCELLED'}
            
@@ -986,9 +990,9 @@ class RenderAnimation_S(Operator):
     def execute(self, context):
         print("VRRenderer: execute")
  
-        context.scene.cancelVRRenderer = False
+        context.scene.eeVR.cancelVRRenderer = False
         
-        folder_name = context.scene.eeVR_folder
+        folder_name = context.scene.eeVR.folder
         # Auto generate folder for animation if eeVR_folder left empty
         if folder_name == '' :
             start_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
@@ -1013,7 +1017,7 @@ class RenderAnimation_S(Operator):
        
     def clean(self, context):
         #self._renderer.clean_up()
-        context.scene.cancelVRRenderer = True
+        context.scene.eeVR.cancelVRRenderer = True
 
 
 class RenderToolsPanel(Panel):
@@ -1030,79 +1034,80 @@ class RenderToolsPanel(Panel):
         # Draw the buttons for each of the rendering operators
         layout = self.layout
         col = layout.column()
-        col.prop(context.scene, 'eeVR_folder')
-        col.prop(context.scene, 'renderModeEnum')
-        if context.scene.renderModeEnum == 'DOME':
-            col.prop(context.scene, 'domeModeEnum')
-        col.prop(context.scene, 'renderFOV')
-        col.operator("wl.render_image", text="Render Image")
-        col.operator("wl.render_animation", text="Render Animation")
+        col.prop(context.scene.eeVR, 'folder')
+        col.prop(context.scene.eeVR, 'renderModeEnum')
+        if context.scene.eeVR.renderModeEnum == 'DOME':
+            col.prop(context.scene.eeVR, 'domeModeEnum')
+        col.prop(context.scene.eeVR, 'renderHFOV')
+        col.prop(context.scene.eeVR, 'renderVFOV')
+        col.operator(RenderImage.bl_idname, text="Render Image")
+        col.operator(RenderAnimation.bl_idname, text="Render Animation")
         col.separator()
         col.label(text="Simplified Renderer:")
-        col.operator("wl.render_image_simple", text="Render Image")
-        col.operator("wl.render_animation_simple", text="Render Animation")
-        if not context.scene.cancelVRRenderer:
+        col.operator(RenderImage_S.bl_idname, text="Render Image")
+        col.operator(RenderAnimation_S.bl_idname, text="Render Animation")
+        if not context.scene.eeVR.cancelVRRenderer:
             col.separator()
-            col.operator("wl.render_cancel", text="Cancel")
+            col.operator(VRRendererCancel.bl_idname, text="Cancel")
             col.label(text="Rendering frame {}".format(bpy.context.scene.frame_current))
 
- 
-# Register all classes
-def register():
-    bpy.types.Scene.eeVR_folder = bpy.props.StringProperty(name='Folder', description='Caution overwrite!! Folder name under current path for animation rendering, leave empty to use auto-generated folder. Do not use path.')
-    bpy.types.Scene.renderModeEnum = bpy.props.EnumProperty(
-        items = [('EQUI', 'Equirectangular', 'Renders in equirectangular projection'),
-                 ('DOME', 'Full Dome', 'Renders in full dome projection')],
-        default='EQUI',
-        name="Mode")
-    bpy.types.Scene.domeModeEnum = bpy.props.EnumProperty(
-        items = [('0', 'Equidistant (VTA)', 'Renders in equidistant dome projection'),
-                 ('1', 'Hemispherical (VTH)', 'Renders in hemispherical dome projection'),
-                 ('2', 'Equisolid', 'Renders in equisolid dome projection'),
-                 ('3', 'Stereographic', 'Renders in Stereographic dome projection')],
-        default='0',
-        name="Method")
-    bpy.types.Scene.renderFOV = bpy.props.FloatProperty(180.0,default=180.0, name="FOV", min=180, max=360,
-                                description="Field of view in degrees")
-    bpy.types.Scene.cancelVRRenderer = bpy.props.BoolProperty(name="Cancel", default=True)
-    bpy.utils.register_class(RenderImage)
-    bpy.utils.register_class(RenderAnimation)
-    bpy.utils.register_class(RenderImage_S)
-    bpy.utils.register_class(RenderAnimation_S)
-    bpy.utils.register_class(RenderToolsPanel)
-    bpy.utils.register_class(VRRendererCancel)
-   
-   
- 
- 
-# Unregister all classes
-def unregister():
-    del bpy.types.Scene.eeVR_folder
-    del bpy.types.Scene.domeModeEnum
-    del bpy.types.Scene.renderModeEnum
-    del bpy.types.Scene.renderFOV
-    bpy.utils.unregister_class(RenderImage)
-    bpy.utils.unregister_class(RenderAnimation)
-    bpy.utils.unregister_class(RenderImage_S)
-    bpy.utils.unregister_class(RenderAnimation_S)
-    bpy.utils.unregister_class(RenderToolsPanel)
-    bpy.utils.unregister_class(VRRendererCancel)
- 
- 
-bl_info = {
-    "name": "eeVR",
-    "description": "Render in different projections using Eevee engine",
-    "author": "EternalTrail",
-    "version": (0, 1),
-    "blender": (2, 82, 7),
-    "location": "View3D > UI",
-    "warning": "This addon is still in early alpha, may break your blend file!",
-    "wiki_url": "https://github.com/EternalTrail/eeVR",
-    "tracker_url": "https://github.com/EternalTrail/eeVR/issues",
-    "support": "TESTING",
-    "category": "Render",
-}
- 
-# If the script is not an addon when it is run, register the classes
-if __name__=="__main__":
-    register()
+
+# eeVR's properties
+class Properties(bpy.types.PropertyGroup):
+
+    folder: bpy.props.StringProperty(
+        name='Folder',
+        description='Caution overwrite!! Folder name under current path for animation rendering, leave empty to use auto-generated folder. Do not use path.'
+    )
+
+    renderModeEnum: bpy.props.EnumProperty(
+        items=[
+            ("EQUI", "Equirectangular", "Renders in equirectangular projection"),
+            ("DOME", "Full Dome", "Renders in full dome projection"),
+        ],
+        default="EQUI",
+        name="Mode",
+    )
+
+    domeModeEnum: bpy.props.EnumProperty(
+        items=[
+            ("0", "Equidistant (VTA)", "Renders in equidistant dome projection"),
+            ("1", "Hemispherical (VTH)", "Renders in hemispherical dome projection"),
+            ("2", "Equisolid", "Renders in equisolid dome projection"),
+            ("3", "Stereographic", "Renders in Stereographic dome projection"),
+        ],
+        default="0",
+        name="Method",
+    )
+
+    renderHFOV: bpy.props.FloatProperty(
+        180.0,
+        default=180.0,
+        name="HFOV",
+        min=1,
+        max=360,
+        description="Horizontal Field of view in degrees",
+    )
+
+    renderVFOV: bpy.props.FloatProperty(
+        180.0,
+        default=180.0,
+        name="VFOV",
+        min=1,
+        max=180,
+        description="Vertical Field of view in degrees",
+    )
+
+    cancelVRRenderer: bpy.props.BoolProperty(
+        name="Cancel", default=True
+    )
+
+    @classmethod
+    def register(cls):
+        """ Register eeVR's properties to Blender """
+        bpy.types.Scene.eeVR = bpy.props.PointerProperty(type=cls)
+
+    @classmethod
+    def unregister(cls):
+        """ Unregister eeVR's properties from Blender """
+        del bpy.types.Scene.eeVR
