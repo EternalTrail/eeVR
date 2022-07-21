@@ -22,13 +22,6 @@ uniform sampler2D cubeBackImage;
 uniform sampler2D cubeFrontImage;
 '''
 
-domemodes = [
-    'pt.xy = dunit * phi;',
-    'pt.xy = dunit * sin(phi);',
-    'pt.xy = 2.0 * dunit * sin(phi / 2.0);',
-    'pt.xy = 2.0 * dunit * tan(phi / 2.0);'
-]
-
 dome = '''
 
 in vec2 vTexCoord;
@@ -42,18 +35,25 @@ void main() {{
     if( r > 1.0 ) discard;
 
     float fovfrac = {0}/360.0;
+    float sidefrac = min(1.0, ({0}-90.0)/180.0);
     
     vec2 dunit = normalize(d);
     float phi = fovfrac*r*PI;
     vec3 pt;
-
     {1}
-    pt.z = cos(phi); 
+    pt.z = cos(phi);
 
     // Select the correct pixel
     float side = float((abs(pt.x) >= abs(pt.y)) && (abs(pt.x) >= abs(pt.z)));
     float notfront = float(abs(pt.y) >= abs(pt.z));
 '''
+
+domemodes = [
+    'pt.xy = dunit * phi;',
+    'pt.xy = dunit * sin(phi);',
+    'pt.xy = 2.0 * dunit * sin(phi / 2.0);',
+    'pt.xy = 2.0 * dunit * tan(phi / 2.0);'
+]
 
 equi = '''
 
@@ -64,9 +64,8 @@ out vec4 fragColor;
 void main() {{
 
     // Calculate the pointing angle
-    float fovd = {0};
-    float fovfrac = fovd/360.0;
-    float sidefrac = (fovd-90.0)/180;
+    float fovfrac = {0}/360.0;
+    float sidefrac = min(1.0, ({0}-90.0)/180.0);
     float azimuth = vTexCoord.x * PI * fovfrac;
     float elevation = vTexCoord.y * PI / 2.0;
     
