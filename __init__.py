@@ -2,22 +2,20 @@
 
 # pylint: disable=import-error
 
-from datetime import datetime
-from math import sin, cos, pi
-import os
-import bpy
-import gpu
-import bgl
-import mathutils
-import numpy as np
-from bpy.types import Operator, Panel
-from gpu_extras.batch import batch_for_shader
+if "bpy" in locals():
+    import importlib
+    importlib.reload(VRRenderer)
+else:
+    from . import VRRenderer
+
 from .VRRenderer import RenderImage, RenderAnimation, RenderToolsPanel, VRRendererCancel
 
-# Register all classes
-def register():
-    """ Register eeVR to Blender """
-    bpy.types.Scene.renderModeEnum = bpy.props.EnumProperty(
+import bpy
+
+# eeVR's properties
+class Properties(bpy.types.PropertyGroup):
+
+    renderModeEnum : bpy.props.EnumProperty(
         items=[
             ("EQUI", "Equirectangular", "Renders in equirectangular projection"),
             ("DOME", "Full Dome", "Renders in full dome projection"),
@@ -25,7 +23,8 @@ def register():
         default="EQUI",
         name="Mode",
     )
-    bpy.types.Scene.domeModeEnum = bpy.props.EnumProperty(
+
+    domeModeEnum : bpy.props.EnumProperty(
         items=[
             ("0", "Equidistant (VTA)", "Renders in equidistant dome projection"),
             ("1", "Hemispherical (VTH)", "Renders in hemispherical dome projection"),
@@ -35,7 +34,8 @@ def register():
         default="0",
         name="Method",
     )
-    bpy.types.Scene.renderFOV = bpy.props.FloatProperty(
+
+    renderFOV : bpy.props.FloatProperty(
         180.0,
         default=180.0,
         name="FOV",
@@ -43,25 +43,20 @@ def register():
         max=360,
         description="Field of view in degrees",
     )
-    bpy.types.Scene.cancelVRRenderer = bpy.props.BoolProperty(
+
+    cancelVRRenderer : bpy.props.BoolProperty(
         name="Cancel", default=True
     )
-    bpy.utils.register_class(RenderImage)
-    bpy.utils.register_class(RenderAnimation)
-    bpy.utils.register_class(RenderToolsPanel)
-    bpy.utils.register_class(VRRendererCancel)
 
+    @classmethod
+    def register(cls):
+        """ Register eeVR's properties to Blender """
+        bpy.types.Scene.eeVR = bpy.props.PointerProperty(type=cls)
 
-# Unregister all classes
-def unregister():
-    """ Unregister eeVR from Blender """
-    del bpy.types.Scene.domeModeEnum
-    del bpy.types.Scene.renderModeEnum
-    del bpy.types.Scene.renderFOV
-    bpy.utils.unregister_class(RenderImage)
-    bpy.utils.unregister_class(RenderAnimation)
-    bpy.utils.unregister_class(RenderToolsPanel)
-    bpy.utils.unregister_class(VRRendererCancel)
+    @classmethod
+    def unregister(cls):
+        """ Unregister eeVR's properties from Blender """
+        del bpy.types.Scene.eeVR
 
 
 bl_info = {
@@ -78,6 +73,11 @@ bl_info = {
     "category": "Render",
 }
 
-# If the script is not an addon when it is run, register the classes
-if __name__ == "__main__":
-    register()
+# REGISTER
+register, unregister = bpy.utils.register_classes_factory((
+    Properties,
+    RenderToolsPanel,
+    RenderImage,
+    RenderAnimation,
+    VRRendererCancel,
+))

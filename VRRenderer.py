@@ -262,7 +262,7 @@ class VRRenderer:
         self.no_back_image = (self.FOV <= 270)
         self.no_side_images = (self.FOV <= 90) # TODO - Not implemented yet, probably not needed
         self.is_dome = (mode == 'DOME')
-        self.domeMode = bpy.context.scene.domeModeEnum
+        self.domeMode = bpy.context.scene.eeVR.domeModeEnum
         self.createdFiles = set()
         
         # Select the correct shader
@@ -691,7 +691,7 @@ class VRRendererCancel(Operator):
     bl_label = "Cancel the render"
  
     def execute(self, context):
-        context.scene.cancelVRRenderer = True
+        context.scene.eeVR.cancelVRRenderer = True
         return {'FINISHED'}
 
 
@@ -704,8 +704,8 @@ class RenderImage(Operator):
     def execute(self, context):
         print("VRRenderer: execute")
        
-        mode = bpy.context.scene.renderModeEnum
-        FOV = bpy.context.scene.renderFOV
+        mode = bpy.context.scene.eeVR.renderModeEnum
+        FOV = bpy.context.scene.eeVR.renderFOV
         renderer = VRRenderer(bpy.context.scene.render.use_multiview, False, mode, FOV)
         now = time.time()
         renderer.render_and_save() 
@@ -733,7 +733,7 @@ class RenderAnimation(Operator):
             wm = context.window_manager
             wm.event_timer_remove(self._timer)
            
-            if context.scene.cancelVRRenderer:
+            if context.scene.eeVR.cancelVRRenderer:
                 self.cancel(context)
                 return {'CANCELLED'}
            
@@ -752,10 +752,10 @@ class RenderAnimation(Operator):
     def execute(self, context):
         print("VRRenderer: execute")
  
-        context.scene.cancelVRRenderer = False
+        context.scene.eeVR.cancelVRRenderer = False
        
-        mode = bpy.context.scene.renderModeEnum
-        FOV = bpy.context.scene.renderFOV
+        mode = bpy.context.scene.eeVR.renderModeEnum
+        FOV = bpy.context.scene.eeVR.renderFOV
         # knowing it's animation, creates folder outside vrrender class, pass folder name to it
         start_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
         folder_name = "Render Result {}/".format(start_time)
@@ -777,7 +777,7 @@ class RenderAnimation(Operator):
        
     def clean(self, context):
         self._renderer.clean_up()
-        context.scene.cancelVRRenderer = True
+        context.scene.eeVR.cancelVRRenderer = True
        
  
  
@@ -795,12 +795,12 @@ class RenderToolsPanel(Panel):
         # Draw the buttons for each of the rendering operators
         layout = self.layout
         col = layout.column()
-        col.prop(context.scene, 'renderModeEnum')
-        if context.scene.renderModeEnum == 'DOME':
-            col.prop(context.scene, 'domeModeEnum')
-        col.prop(context.scene, 'renderFOV')
+        col.prop(context.scene.eeVR, 'renderModeEnum')
+        if context.scene.eeVR.renderModeEnum == 'DOME':
+            col.prop(context.scene.eeVR, 'domeModeEnum')
+        col.prop(context.scene.eeVR, 'renderFOV')
         col.operator("wl.render_image", text="Render Image")
         col.operator("wl.render_animation", text="Render Animation")
-        if not context.scene.cancelVRRenderer:
+        if not context.scene.eeVR.cancelVRRenderer:
             col.operator("wl.render_cancel", text="Cancel")
             col.label(text="Rendering frame {}".format(bpy.context.scene.frame_current))
