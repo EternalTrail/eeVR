@@ -155,10 +155,17 @@ class ToolPanel(Panel):
             col.prop(props, 'domeModeEnum')
         col.prop(props, 'renderHFOV')
         col.prop(props, 'renderHFill')
-        col.label(text=f"Actual Degree : {round(props.renderHFOV * props.renderHFill)}°")
+        row = col.row()
+        row.alignment = 'RIGHT'
+        row.label(text=f"Actual Degree : {round(props.renderHFOV * props.renderHFill)}°")
         col.prop(props, 'renderVFOV')
         col.prop(props, 'renderVFill')
-        col.label(text=f"Actual Degree : {round(props.renderVFOV * props.renderVFill)}°")
+        row = col.row()
+        row.alignment = 'RIGHT'
+        row.label(text=f"Actual Degree : {round(props.renderVFOV * props.renderVFill)}°")
+        col.prop(props, 'blendMargin')
+        layout.separator()
+        col = layout.column()
         col.operator(RenderImage.bl_idname, text="Render Image")
         col.operator(RenderAnimation.bl_idname, text="Render Animation")
         if not props.cancel:
@@ -225,13 +232,13 @@ class Properties(bpy.types.PropertyGroup):
         description="Vertical Render Regeon in rate of Vertical FOV",
     )
 
-    renderVFOV: bpy.props.FloatProperty(
-        180.0,
-        default=180.0,
-        name="VFOV",
+    blendMargin: bpy.props.FloatProperty(
+        6.0,
+        default=6.0,
+        name="Blend Margin",
         min=1,
-        max=180,
-        description="Vertical Field of view in degrees",
+        max=90,
+        description="Margin for Blending in degrees",
     )
 
     cancel: bpy.props.BoolProperty(

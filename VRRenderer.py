@@ -68,7 +68,9 @@ void main() {
     
     // Select the correct pixel
     float side = float((abs(pt.x) >= abs(pt.y)) && (abs(pt.x) >= abs(pt.z)));
-    float top_or_bottom = float(abs(pt.y) >= abs(pt.z));
+    float tob = float(abs(pt.y) >= abs(pt.z)); // top_or_bottom
+    float not_side = 1.0 - side;
+    float not_tob = 1.0 - tob;
 '''
 
 fetch_sides = '''
@@ -79,19 +81,19 @@ fetch_sides = '''
 
 fetch_top_bottom = '''
     float down = float(pt.y <= 0.0);
-    fragColor += (1.0 - side) * top_or_bottom * down * texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+(2.0*sidefrac-1.0))/(2.0*sidefrac)));
-    fragColor += (1.0 - side) * top_or_bottom * (1.0 - down) * texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/(2.0*sidefrac)));
+    fragColor += not_side * tob * down * texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+(2.0*sidefrac-1.0))/(2.0*sidefrac)));
+    fragColor += not_side * tob * (1.0 - down) * texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/(2.0*sidefrac)));
 '''
 
 fetch_front_back = '''
     float back = float(pt.z <= 0.0);
-    fragColor += (1.0 - side) * (1.0 - top_or_bottom) * back * texture(cubeBackImage, vec2(((pt.x/pt.z)+1.0)/2.0,((-pt.y/pt.z)+1.0)/2.0));
-    fragColor += (1.0 - side) * (1.0 - top_or_bottom) * (1.0 - back) * texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
+    fragColor += not_side * not_tob * back * texture(cubeBackImage, vec2(((pt.x/pt.z)+1.0)/2.0,((-pt.y/pt.z)+1.0)/2.0));
+    fragColor += not_side * not_tob * (1.0 - back) * texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
 }
 '''
 
 fetch_front_only = '''
-    fragColor += (1.0 - side) * (1.0 - top_or_bottom) * texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
+    fragColor += not_side * not_tob * texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
 }
 '''
 
@@ -105,7 +107,6 @@ class Renderer:
         
         # Set internal variables for the class
         self.scene = context.scene
-        ##### newly edited codes begin
         # save original active object
         self.viewlayer_active_object_origin = context.view_layer.objects.active
         # save original active camera handle
@@ -122,7 +123,6 @@ class Renderer:
         self.camera.matrix_world = self.camera_origin.matrix_world
         # transfer key attributes that may affect rendering, conv dis not needed 'cause it is parallel
         self.camera.data.stereo.interocular_distance = self.camera_origin.data.stereo.interocular_distance
-        ##### newly edited codes end
         self.path = bpy.path.abspath("//")
         self.is_stereo = context.scene.render.use_multiview
         self.is_animation = is_animation
@@ -135,22 +135,13 @@ class Renderer:
         self.domeMode = bpy.context.scene.eeVR.domeModeEnum
         self.createdFiles = set()
         
-        # Select the correct shader
-        # Insert the FOV into the shader
-        self.frag_shader = commdef % (self.HFOV / 360.0, self.VFOV / 180.0, min(1.0, (self.HFOV - 90.0) / 180.0))
-        if self.is_dome:
-            # Insert the Mode into the shader
-            self.frag_shader += dome % domemodes[int(self.domeMode)]
-        else:
-            self.frag_shader += equi
-        if not self.no_side_images:
-            self.frag_shader += fetch_sides
-        if not self.no_top_bottom_images:
-            self.frag_shader += fetch_top_bottom
-        if not self.no_back_image:
-            self.frag_shader += fetch_front_back
-        else:
-            self.frag_shader += fetch_front_only
+        # Generate shader
+        self.frag_shader = \
+           (commdef % (self.HFOV / 360.0, self.VFOV / 180.0, min(1.0, (self.HFOV - 90.0) / 180.0)))\
+         + (dome % domemodes[int(self.domeMode)] if self.is_dome else equi)\
+         + ('' if self.no_side_images else fetch_sides)\
+         + ('' if self.no_top_bottom_images else fetch_top_bottom)\
+         + (fetch_front_only if self.no_back_image else fetch_front_back)
         
         # Set the image name to the current time
         self.start_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
@@ -158,26 +149,9 @@ class Renderer:
         self.folder_name = folder
         
         # Get initial camera and output information
-        ##### newly edited codes begin
         # now origin camera data not need store, and no more need to use empty as proxy
         self.camera_rotation = list(self.camera.rotation_euler)
         self.IPD = self.camera.data.stereo.interocular_distance
-        #self.camera_type = self.camera.data.type
-        #self.camera_angle = self.camera.data.angle
-        #self.stereo_type = self.camera.data.stereo.convergence_mode
-        #self.stereo_pivot = self.camera.data.stereo.pivot
-        
-        # Create an empty to be used to control the camera
-        #try:
-        #    self.camera_empty = bpy.data.objects['eeVR_CAMERA_EMPTY']
-        #except KeyError:
-        #    self.camera_empty = bpy.data.objects.new('eeVR_CAMERA_EMPTY', None)
-        
-        # Create a copy transforms constraint for the camera
-        #self.trans_constraint = self.camera.constraints.new('COPY_TRANSFORMS')
-        ##### newly edited codes end
-        
-        #self.camera.rotation_euler
         
         # Set camera variables for proper result
         self.camera.data.type = 'PANO'
@@ -318,10 +292,8 @@ class Renderer:
     
     def find_direction_offsets(self):
         
-        ##### newly added codes begin
         # update location and rotation of our camera from origin one
         self.camera.matrix_world = self.camera_origin.matrix_world
-        ##### newly added codes end
         # Calculate the pointing directions of the camera for each face of the cube
         # Using euler.rotate_axis() to handle, notice that rotation should be done on copies
         eul = self.camera.rotation_euler.copy()
@@ -351,7 +323,6 @@ class Renderer:
     def set_camera_direction(self, direction):
         
         # Set the camera to the required postion    
-        #self.camera_empty.rotation_euler = self.direction_offsets[direction]
         self.camera.rotation_euler = self.direction_offsets[direction]
         
         if self.no_back_image:
@@ -364,27 +335,18 @@ class Renderer:
     def clean_up(self, context):
 
         # Reset all the variables that were changed
-        ##### newly edited codes begin
-        #self.camera.constraints.remove(self.trans_constraint)
-        #self.camera.data.type = self.camera_type
-        #self.camera.data.stereo.convergence_mode = self.stereo_type
-        #self.camera.data.stereo.pivot = self.stereo_pivot
-        #self.camera.data.angle = self.camera_angle
-        #self.camera.rotation_euler = self.camera_rotation
-        #self.camera.data.shift_x = 0
-        #self.camera.data.shift_y = 0
         context.view_layer.objects.active = self.viewlayer_active_object_origin
         context.scene.camera = self.camera_origin
         bpy.data.objects.remove(self.camera)
-        ##### newly edited codes end
         self.scene.render.resolution_x = self.image_size[0]
         self.scene.render.resolution_y = self.image_size[1]
         self.scene.render.resolution_percentage = self.resolution_percentage_origin
         if self.is_stereo:
             self.scene.render.image_settings.views_format = self.view_format
             self.scene.render.image_settings.stereo_3d_format.display_mode = self.stereo_mode
-        for filename in self.createdFiles:
-            os.remove(filename)
+        # for filename in self.createdFiles:
+        #     os.remove(filename)
+        self.createdFiles.clear()
     
     
     def render_image(self, direction):
@@ -404,12 +366,8 @@ class Renderer:
                 bpy.data.images.remove(bpy.data.images[nameR])
             
             self.scene.render.use_multiview = False
-            #tmp_loc = list(self.camera_empty.location)
             tmp_loc = list(self.camera.location)
             camera_angle = self.direction_offsets['front'][2]
-            #self.camera_empty.location = [tmp_loc[0]+(0.5*self.IPD*cos(camera_angle)),\
-            #                        tmp_loc[1]+(0.5*self.IPD*sin(camera_angle)),\
-            #                        tmp_loc[2]]
             self.camera.location = [tmp_loc[0]+(0.5*self.IPD*cos(camera_angle)),\
                                     tmp_loc[1]+(0.5*self.IPD*sin(camera_angle)),\
                                     tmp_loc[2]]
@@ -420,9 +378,6 @@ class Renderer:
             renderedImageL = bpy.data.images.load(self.scene.render.filepath)
             renderedImageL.name = nameL
             
-            #self.camera_empty.location = [tmp_loc[0]-(0.5*self.IPD*cos(camera_angle)),\
-            #                        tmp_loc[1]-(0.5*self.IPD*sin(camera_angle)),\
-            #                        tmp_loc[2]]
             self.camera.location = [tmp_loc[0]-(0.5*self.IPD*cos(camera_angle)),\
                                     tmp_loc[1]-(0.5*self.IPD*sin(camera_angle)),\
                                     tmp_loc[2]]
@@ -501,9 +456,6 @@ class Renderer:
             directions += ['back']
 
         self.direction_offsets = self.find_direction_offsets()
-        #self.camera_empty.location = self.camera.location
-        #self.camera_empty.rotation_euler = self.camera.rotation_euler
-        #self.trans_constraint.target = self.camera_empty
         for direction in reversed(directions): # I want the results of the front camera to remain in the render window... just that.
             self.set_camera_direction(direction)
             img1, img2 = self.render_image(direction)
@@ -511,7 +463,6 @@ class Renderer:
             image_list_2.insert(0, img2)
         
         self.set_camera_direction('front')
-        #self.trans_constraint.target = None
         
         return image_list_1, image_list_2
 
