@@ -18,6 +18,10 @@ uniform sampler2D cubeTopImage;
 uniform sampler2D cubeBackImage;
 uniform sampler2D cubeFrontImage;
 
+const float hfovfrac = %f;
+const float vfovfrac = %f;
+const float sidefrac = %f;
+
 in vec2 vTexCoord;
 
 out vec4 fragColor;
@@ -25,19 +29,16 @@ out vec4 fragColor;
 '''
 
 dome = '''
-void main() {{
+void main() {
 
     vec2 d = vTexCoord.xy;
     float r = length(d);
     if( r > 1.0 ) discard;
-
-    float hfovfrac = {0};
-    float sidefrac = {1};
     
     vec2 dunit = normalize(d);
     float phi = hfovfrac*r*PI;
     vec3 pt;
-    {2}
+    %s
     pt.z = cos(phi);
 
     // Select the correct pixel
@@ -53,11 +54,9 @@ domemodes = [
 ]
 
 equi = '''
-void main() {{
+void main() {
 
     // Calculate the pointing angle
-    float hfovfrac = {0};
-    float sidefrac = {1};
     float azimuth = vTexCoord.x * PI * hfovfrac;
     float elevation = vTexCoord.y * PI / 2.0;
     
@@ -69,7 +68,7 @@ void main() {{
     
     // Select the correct pixel
     float side = float((abs(pt.x) >= abs(pt.y)) && (abs(pt.x) >= abs(pt.z)));
-    float notfront = float(abs(pt.y) >= abs(pt.z));
+    float top_or_bottom = float(abs(pt.y) >= abs(pt.z));
 '''
 
 fetch_sides = '''
@@ -80,41 +79,43 @@ fetch_sides = '''
 
 fetch_top_bottom = '''
     float down = float(pt.y <= 0.0);
-    fragColor += (1.0 - side) * notfront * down * texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+(2.0*sidefrac-1.0))/(2.0*sidefrac)));
-    fragColor += (1.0 - side) * notfront * (1.0 - down) * texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/(2.0*sidefrac)));
+    fragColor += (1.0 - side) * top_or_bottom * down * texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+(2.0*sidefrac-1.0))/(2.0*sidefrac)));
+    fragColor += (1.0 - side) * top_or_bottom * (1.0 - down) * texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/(2.0*sidefrac)));
 '''
 
 fetch_front_back = '''
     float back = float(pt.z <= 0.0);
-    fragColor += (1.0 - side) * (1.0 - notfront) * back * texture(cubeBackImage, vec2(((pt.x/pt.z)+1.0)/2.0,((-pt.y/pt.z)+1.0)/2.0));
-    fragColor += (1.0 - side) * (1.0 - notfront) * (1.0 - back) * texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
-}}
+    fragColor += (1.0 - side) * (1.0 - top_or_bottom) * back * texture(cubeBackImage, vec2(((pt.x/pt.z)+1.0)/2.0,((-pt.y/pt.z)+1.0)/2.0));
+    fragColor += (1.0 - side) * (1.0 - top_or_bottom) * (1.0 - back) * texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
+}
 '''
 
 fetch_front_only = '''
-    fragColor += (1.0 - side) * (1.0 - notfront) * texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
-}}
+    fragColor += (1.0 - side) * (1.0 - top_or_bottom) * texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
+}
 '''
 
 class Renderer:
     
-    def __init__(self, is_stereo = False, is_animation = False, mode = 'EQUI', HFOV = 180, VFOV = 180, folder = ''):
+    def __init__(self, context, is_animation = False, mode = 'EQUI', HFOV = 180, VFOV = 180, folder = ''):
         
         # Check if the file is saved or not, can cause errors when not saved
         if not bpy.data.is_saved:
             raise PermissionError("Save file before rendering")
         
         # Set internal variables for the class
-        self.scene = bpy.context.scene
+        self.scene = context.scene
         ##### newly edited codes begin
+        # save original active object
+        self.viewlayer_active_object_origin = context.view_layer.objects.active
         # save original active camera handle
-        self.camera_origin = bpy.context.scene.camera
+        self.camera_origin = context.scene.camera
         # create a new camera for rendering
         bpy.ops.object.camera_add()
-        self.camera = bpy.context.object
+        self.camera = context.object
         self.camera.name = 'eeVR_camera'
         # set new cam active
-        bpy.context.scene.camera = self.camera
+        context.scene.camera = self.camera
         # set coordinates same as origin by using world matrix already transformed but not location or rotation
         # and always using it to update correct coordinates before rendering
         # no constraints, parent, drivers and keyframes for new cam, now we can handle cameras with those stuff
@@ -123,7 +124,7 @@ class Renderer:
         self.camera.data.stereo.interocular_distance = self.camera_origin.data.stereo.interocular_distance
         ##### newly edited codes end
         self.path = bpy.path.abspath("//")
-        self.is_stereo = is_stereo
+        self.is_stereo = context.scene.render.use_multiview
         self.is_animation = is_animation
         self.HFOV = min(max(HFOV, 1), 360)
         self.VFOV = min(max(VFOV, 1), 180)
@@ -135,26 +136,21 @@ class Renderer:
         self.createdFiles = set()
         
         # Select the correct shader
+        # Insert the FOV into the shader
+        self.frag_shader = commdef % (self.HFOV / 360.0, self.VFOV / 180.0, min(1.0, (self.HFOV - 90.0) / 180.0))
         if self.is_dome:
-            self.frag_shader = commdef + dome
+            # Insert the Mode into the shader
+            self.frag_shader += dome % domemodes[int(self.domeMode)]
         else:
-            self.frag_shader = commdef + equi
+            self.frag_shader += equi
         if not self.no_side_images:
             self.frag_shader += fetch_sides
         if not self.no_top_bottom_images:
             self.frag_shader += fetch_top_bottom
-        if self.no_back_image:
-            self.frag_shader += fetch_front_only
-        else:
+        if not self.no_back_image:
             self.frag_shader += fetch_front_back
-        if self.is_dome:
-            # Insert the FOV and Mode  into the shader
-            self.frag_shader = self.frag_shader.format(
-                self.HFOV / 360.0, min(1.0, (self.HFOV - 90.0) / 180.0), domemodes[int(self.domeMode)]
-            )
         else:
-            # Insert the FOV into the shader
-            self.frag_shader = self.frag_shader.format(self.HFOV / 360.0, min(1.0, (self.HFOV - 90.0) / 180.0))
+            self.frag_shader += fetch_front_only
         
         # Set the image name to the current time
         self.start_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
@@ -190,7 +186,7 @@ class Renderer:
         self.camera.data.angle = pi/2
         
         self.image_size = (self.scene.render.resolution_x, self.scene.render.resolution_y)
-        self.org_resolution_percentage = self.scene.render.resolution_percentage
+        self.resolution_percentage_origin = self.scene.render.resolution_percentage
         
         self.side_resolution = int(max(self.image_size)+4-max(self.image_size)%4)/2 if max(self.image_size)%4 > 0\
                                else int(max(self.image_size)/2)
@@ -365,9 +361,8 @@ class Renderer:
             self.scene.render.resolution_y = int(self.camera_shift[direction][3])
             self.scene.render.resolution_percentage = 100
         
+    def clean_up(self, context):
 
-    def clean_up(self):
-        
         # Reset all the variables that were changed
         ##### newly edited codes begin
         #self.camera.constraints.remove(self.trans_constraint)
@@ -378,12 +373,13 @@ class Renderer:
         #self.camera.rotation_euler = self.camera_rotation
         #self.camera.data.shift_x = 0
         #self.camera.data.shift_y = 0
-        bpy.context.scene.camera = self.camera_origin
+        context.view_layer.objects.active = self.viewlayer_active_object_origin
+        context.scene.camera = self.camera_origin
         bpy.data.objects.remove(self.camera)
         ##### newly edited codes end
         self.scene.render.resolution_x = self.image_size[0]
         self.scene.render.resolution_y = self.image_size[1]
-        self.scene.render.resolution_percentage = self.org_resolution_percentage
+        self.scene.render.resolution_percentage = self.resolution_percentage_origin
         if self.is_stereo:
             self.scene.render.image_settings.views_format = self.view_format
             self.scene.render.image_settings.stereo_3d_format.display_mode = self.stereo_mode
