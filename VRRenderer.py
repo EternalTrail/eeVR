@@ -20,7 +20,8 @@ uniform sampler2D cubeFrontImage;
 
 const float hfovfrac = %f;
 const float vfovfrac = %f;
-const float sidefrac = %f;
+const float sidefracx2_1 = %f;
+const float invsidefracx2 = %f;
 
 in vec2 vTexCoord;
 
@@ -33,7 +34,7 @@ void main() {
 dome = '''
     vec2 d = vTexCoord.xy;
     float r = length(d);
-    if( r > 1.0 ) discard;
+    if(r > 1.0) discard;
     
     vec2 dunit = normalize(d);
     float phi = hfovfrac*r*PI;
@@ -53,7 +54,7 @@ domemodes = [
 equi = '''
     // Calculate the pointing angle
     float azimuth = vTexCoord.x * PI * hfovfrac;
-    float elevation = vTexCoord.y * PI / 2.0;
+    float elevation = vTexCoord.y * PI * vfovfrac / 2.0;
     
     // Calculate the pointing vector
     vec3 pt;
@@ -75,20 +76,20 @@ fetch_setup = '''
 
 fetch_sides = '''
     float left = step(0.0, -pt.x);
-    fragColor += lor * left * texture(cubeLeftImage, vec2(((-pt.z/pt.x)+(2.0*sidefrac-1.0))/(2.0*sidefrac),((-pt.y/pt.x)+1.0)/2.0));
-    fragColor += lor * (1.0 - left) * texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0)/(2.0*sidefrac),((pt.y/pt.x)+1.0)/2.0));
+    fragColor += lor * left * texture(cubeLeftImage, vec2(((-pt.z/pt.x)+sidefracx2_1)*invsidefracx2,((-pt.y/pt.x)+1.0)*0.5));
+    fragColor += lor * (1.0 - left) * texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0)*invsidefracx2,((pt.y/pt.x)+1.0)*0.5));
 '''
 
 fetch_top_bottom = '''
     float down = step(0.0, -pt.y);
-    fragColor += tob * down * texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+(2.0*sidefrac-1.0))/(2.0*sidefrac)));
-    fragColor += tob * (1.0 - down) * texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/(2.0*sidefrac)));
+    fragColor += tob * down * texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)*0.5,((-pt.z/pt.y)+sidefracx2_1)*invsidefracx2));
+    fragColor += tob * (1.0 - down) * texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)*0.5,((-pt.z/pt.y)+1.0)*invsidefracx2));
 '''
 
 fetch_front_back = '''
     float back = step(0.0, -pt.z);
-    fragColor += fob * back * texture(cubeBackImage, vec2(((pt.x/pt.z)+1.0)/2.0,((-pt.y/pt.z)+1.0)/2.0));
-    fragColor += fob * (1.0 - back) * texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
+    fragColor += fob * back * texture(cubeBackImage, vec2(((pt.x/pt.z)+1.0)*0.5,((-pt.y/pt.z)+1.0)*0.5));
+    fragColor += fob * (1.0 - back) * texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)*0.5,((pt.y/pt.z)+1.0)*0.5));
 }
 '''
 
@@ -135,9 +136,14 @@ class Renderer:
         self.domeMode = bpy.context.scene.eeVR.domeModeEnum
         self.createdFiles = set()
         
+        hfovfrac = self.HFOV / 360.0
+        vfovfrac = self.VFOV / 180.0
+        sidefrac = min(1.0, (self.HFOV - 90.0) / 180.0)
+        sidefracx2_1 = 2.0*sidefrac-1
+        invsidefracx2 = 1/(2.0*sidefrac)
         # Generate shader code
         self.frag_shader = \
-           (commdef % (self.HFOV / 360.0, self.VFOV / 180.0, min(1.0, (self.HFOV - 90.0) / 180.0)))\
+           (commdef % (hfovfrac, vfovfrac, sidefracx2_1, invsidefracx2))\
          + (dome % domemodes[int(self.domeMode)] if self.is_dome else equi)\
          + fetch_setup\
          + ('' if self.no_side_images else fetch_sides)\

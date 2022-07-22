@@ -41,7 +41,7 @@ class RenderImage(Operator):
         print("eeVR: execute")
 
         mode = context.scene.eeVR.renderModeEnum
-        HFOV = context.scene.eeVR.renderHFOV
+        HFOV = context.scene.eeVR.renderHFOV if mode == 'EQUI' else context.scene.eeVR.renderFOV
         VFOV = context.scene.eeVR.renderVFOV
         renderer = Renderer(context, False, mode, HFOV, VFOV)
         now = time.time()
@@ -92,7 +92,7 @@ class RenderAnimation(Operator):
         context.scene.eeVR.cancel = False
 
         mode = context.scene.eeVR.renderModeEnum
-        HFOV = context.scene.eeVR.renderHFOV
+        HFOV = context.scene.eeVR.renderHFOV if mode == 'EQUI' else context.scene.eeVR.renderFOV
         VFOV = context.scene.eeVR.renderVFOV
         # knowing it's animation, creates folder outside vrrender class, pass folder name to it
         start_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
@@ -153,16 +153,18 @@ class ToolPanel(Panel):
         col.prop(props, 'renderModeEnum')
         if props.renderModeEnum == 'DOME':
             col.prop(props, 'domeModeEnum')
-        col.prop(props, 'renderHFOV')
-        col.prop(props, 'renderHFill')
-        row = col.row()
-        row.alignment = 'RIGHT'
-        row.label(text=f"Actual Degree : {round(props.renderHFOV * props.renderHFill)}°")
-        col.prop(props, 'renderVFOV')
-        col.prop(props, 'renderVFill')
-        row = col.row()
-        row.alignment = 'RIGHT'
-        row.label(text=f"Actual Degree : {round(props.renderVFOV * props.renderVFill)}°")
+            col.prop(props, 'renderFOV')
+        else:
+            col.prop(props, 'renderHFOV')
+            col.prop(props, 'renderHFill')
+            row = col.row()
+            row.alignment = 'RIGHT'
+            row.label(text=f"Actual Degree : {round(props.renderHFOV * props.renderHFill)}°")
+            col.prop(props, 'renderVFOV')
+            col.prop(props, 'renderVFill')
+            row = col.row()
+            row.alignment = 'RIGHT'
+            row.label(text=f"Actual Degree : {round(props.renderVFOV * props.renderVFill)}°")
         col.prop(props, 'blendMargin')
         layout.separator()
         col = layout.column()
@@ -194,6 +196,15 @@ class Properties(bpy.types.PropertyGroup):
         ],
         default="0",
         name="Method",
+    )
+
+    renderFOV: bpy.props.FloatProperty(
+        180.0,
+        default=180.0,
+        name="FOV",
+        min=180,
+        max=360,
+        description="Field of view in degrees",
     )
 
     renderHFOV: bpy.props.FloatProperty(
