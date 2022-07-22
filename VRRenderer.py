@@ -1,5 +1,5 @@
 import bpy
-import os
+import time
 import gpu
 import bgl
 import numpy as np
@@ -26,11 +26,11 @@ in vec2 vTexCoord;
 
 out vec4 fragColor;
 
+void main() {
+
 '''
 
 dome = '''
-void main() {
-
     vec2 d = vTexCoord.xy;
     float r = length(d);
     if( r > 1.0 ) discard;
@@ -41,9 +41,6 @@ void main() {
     %s
     pt.z = cos(phi);
 
-    // Select the correct pixel
-    float side = float((abs(pt.x) >= abs(pt.y)) && (abs(pt.x) >= abs(pt.z)));
-    float notfront = float(abs(pt.y) >= abs(pt.z));
 '''
 
 domemodes = [
@@ -54,8 +51,6 @@ domemodes = [
 ]
 
 equi = '''
-void main() {
-
     // Calculate the pointing angle
     float azimuth = vTexCoord.x * PI * hfovfrac;
     float elevation = vTexCoord.y * PI / 2.0;
@@ -65,35 +60,40 @@ void main() {
     pt.x = cos(elevation) * sin(azimuth);
     pt.y = sin(elevation);
     pt.z = cos(elevation) * cos(azimuth);
-    
+
+'''
+
+fetch_setup = '''
     // Select the correct pixel
-    float side = float((abs(pt.x) >= abs(pt.y)) && (abs(pt.x) >= abs(pt.z)));
-    float tob = float(abs(pt.y) >= abs(pt.z)); // top_or_bottom
-    float not_side = 1.0 - side;
-    float not_tob = 1.0 - tob;
+    // left or right
+    float lor = step(abs(pt.y), abs(pt.x)) * step(abs(pt.z), abs(pt.x));
+    // top or bottom
+    float tob = (1.0 - lor) * step(abs(pt.z), abs(pt.y));
+    // front or back
+    float fob = (1.0 - lor) * (1.0 - tob);
 '''
 
 fetch_sides = '''
-    float left = float(pt.x <= 0.0);
-    fragColor += side * left * texture(cubeLeftImage, vec2((((-pt.z/pt.x))+(2.0*sidefrac-1.0))/(2.0*sidefrac),((-pt.y/pt.x)+1.0)/2.0));
-    fragColor += side * (1.0 - left) * texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0)/(2.0*sidefrac),((pt.y/pt.x)+1.0)/2.0));
+    float left = step(0.0, -pt.x);
+    fragColor += lor * left * texture(cubeLeftImage, vec2(((-pt.z/pt.x)+(2.0*sidefrac-1.0))/(2.0*sidefrac),((-pt.y/pt.x)+1.0)/2.0));
+    fragColor += lor * (1.0 - left) * texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0)/(2.0*sidefrac),((pt.y/pt.x)+1.0)/2.0));
 '''
 
 fetch_top_bottom = '''
-    float down = float(pt.y <= 0.0);
-    fragColor += not_side * tob * down * texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+(2.0*sidefrac-1.0))/(2.0*sidefrac)));
-    fragColor += not_side * tob * (1.0 - down) * texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/(2.0*sidefrac)));
+    float down = step(0.0, -pt.y);
+    fragColor += tob * down * texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+(2.0*sidefrac-1.0))/(2.0*sidefrac)));
+    fragColor += tob * (1.0 - down) * texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)/2.0,((-pt.z/pt.y)+1.0)/(2.0*sidefrac)));
 '''
 
 fetch_front_back = '''
-    float back = float(pt.z <= 0.0);
-    fragColor += not_side * not_tob * back * texture(cubeBackImage, vec2(((pt.x/pt.z)+1.0)/2.0,((-pt.y/pt.z)+1.0)/2.0));
-    fragColor += not_side * not_tob * (1.0 - back) * texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
+    float back = step(0.0, -pt.z);
+    fragColor += fob * back * texture(cubeBackImage, vec2(((pt.x/pt.z)+1.0)/2.0,((-pt.y/pt.z)+1.0)/2.0));
+    fragColor += fob * (1.0 - back) * texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
 }
 '''
 
 fetch_front_only = '''
-    fragColor += not_side * not_tob * texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
+    fragColor += fob * texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
 }
 '''
 
@@ -135,10 +135,11 @@ class Renderer:
         self.domeMode = bpy.context.scene.eeVR.domeModeEnum
         self.createdFiles = set()
         
-        # Generate shader
+        # Generate shader code
         self.frag_shader = \
            (commdef % (self.HFOV / 360.0, self.VFOV / 180.0, min(1.0, (self.HFOV - 90.0) / 180.0)))\
          + (dome % domemodes[int(self.domeMode)] if self.is_dome else equi)\
+         + fetch_setup\
          + ('' if self.no_side_images else fetch_sides)\
          + ('' if self.no_top_bottom_images else fetch_top_bottom)\
          + (fetch_front_only if self.no_back_image else fetch_front_back)
@@ -485,6 +486,7 @@ class Renderer:
         else:
             image_name = f"Render Result {self.start_time}.png"
         
+        start_time = time.time()
         # Convert the rendered images to equirectangular projection image and save it to the disk
         if self.is_stereo:
             imageResult1 = self.cubemap_to_panorama(imageList, "Render Left")
@@ -514,6 +516,7 @@ class Renderer:
         else:
             imageResult = self.cubemap_to_panorama(imageList, "RenderResult")
         
+        save_start_time = time.time()
         if self.is_animation:
             # Color Management Settings issue solved by nagadomi
             imageResult.file_format = 'PNG'
@@ -524,6 +527,9 @@ class Renderer:
             imageResult.file_format = 'PNG'
             imageResult.filepath_raw = self.path+image_name
             imageResult.save()
-        
+
+        print(f'''Saved '{imageResult.filepath_raw}'
+ Time : {round(time.time() - start_time, 2)} seconds (Saving : {round(time.time() - save_start_time, 2)} seconds)
+ ''')
+
         bpy.data.images.remove(imageResult)
- 
