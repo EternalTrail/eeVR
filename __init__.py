@@ -15,7 +15,7 @@ else:
 from .VRRenderer import Renderer
 
 import bpy
-from bpy.types import Operator, Panel
+from bpy.types import Context, Operator, Panel
 
 bl_info = {
     "name": "eeVR",
@@ -31,6 +31,14 @@ bl_info = {
     "category": "Render",
 }
 
+
+def has_invalid_condition(self : 'Operator', context : 'Context'):
+    if context.scene.camera == None:
+        self.report({'ERROR'}, "eeVR ERROR : Scene camera is not set.")
+        return True
+    return False
+
+
 class RenderImage(Operator):
     """Render out the animation"""
 
@@ -39,6 +47,9 @@ class RenderImage(Operator):
 
     def execute(self, context):
         print("eeVR: execute")
+
+        if has_invalid_condition(self, context):
+            return {'FINISHED'}
 
         renderer = Renderer(context, False)
         now = time.time()
@@ -85,6 +96,9 @@ class RenderAnimation(Operator):
 
     def execute(self, context):
         print("eeVR: execute")
+
+        if has_invalid_condition(self, context):
+            return {'FINISHED'}
 
         context.scene.eeVR.cancel = False
 
@@ -159,7 +173,7 @@ class ToolPanel(Panel):
             row = col.row()
             row.alignment = 'RIGHT'
             row.label(text=f"Actual Degree : {round(props.renderVFOV * props.renderVFill)}°")
-        col.prop(props, 'blendMargin')
+        col.prop(props, 'stitchMargin')
         layout.separator()
         col = layout.column()
         col.operator(RenderImage.bl_idname, text="Render Image")
@@ -205,7 +219,7 @@ class Properties(bpy.types.PropertyGroup):
         180.0,
         default=180.0,
         name="Horizontal FOV",
-        min=1,
+        min=90,
         max=360,
         description="Horizontal Field of view in degrees",
     )
@@ -214,7 +228,7 @@ class Properties(bpy.types.PropertyGroup):
         180.0,
         default=180.0,
         name="Vertical FOV",
-        min=1,
+        min=90,
         max=180,
         description="Vertical Field of view in degrees",
     )
@@ -237,13 +251,13 @@ class Properties(bpy.types.PropertyGroup):
         description="Vertical Render Regeon in rate of Vertical FOV",
     )
 
-    blendMargin: bpy.props.FloatProperty(
+    stitchMargin: bpy.props.FloatProperty(
         6.0,
         default=6.0,
-        name="Blend Margin",
-        min=1,
-        max=90,
-        description="Margin for Blending in degrees",
+        name="Stitch Margin",
+        min=0,
+        max=45,
+        description="Margin for Seam Blending in degrees",
     )
 
     cancel: bpy.props.BoolProperty(

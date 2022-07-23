@@ -3,7 +3,7 @@ import time
 import gpu
 import bgl
 import numpy as np
-from math import sin, cos, pi
+from math import sin, cos, pi, ceil
 from datetime import datetime
 from gpu_extras.batch import batch_for_shader
 
@@ -11,10 +11,10 @@ commdef = '''
 #define PI        3.1415926535897932384626
 #define HFOVFRAC  %f
 #define VFOVFRAC  %f
-#define HFRACX2_1 %f // HFOVFRAC * 2 - 1
-#define IHFRACX2  %f // 1 / (HFOVFRAC * 2)
-#define VFRACX2_1 %f // VFOVFRAC * 2 - 1
-#define IVFRACX2  %f // 1 / (VFOVFRAC * 2)
+#define HFRACX2_1 %f // ((HFOV - 90) / 180) * 2 - 1
+#define IHFRACX2  %f // 1 / (((HFOV - 90) / 180) * 2)
+#define VFRACX2_1 %f // ((VFOV - 90) / 180) * 2 - 1
+#define IVFRACX2  %f // 1 / (((VFOV - 90) / 180) * 2)
 #define HCLIP     %f
 #define VCLIP     %f
 
@@ -85,26 +85,26 @@ fetch_setup = '''
 '''
 
 fetch_sides = '''
-    float left = step(0.0, -pt.x);
-    fragColor += lor * left * texture(cubeLeftImage, vec2(((-pt.z/pt.x)+HFRACX2_1)*IHFRACX2,((-pt.y/pt.x)+1.0)*0.5));
-    fragColor += lor * (1.0 - left) * texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0)*IHFRACX2,((pt.y/pt.x)+1.0)*0.5));
+    float right = step(0.0, pt.x);
+    fragColor += lor * right * texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0)*IHFRACX2,((pt.y/pt.x)+1.0)*0.5));
+    fragColor += lor * (1.0 - right) * texture(cubeLeftImage, vec2(((-pt.z/pt.x)+HFRACX2_1)*IHFRACX2,((-pt.y/pt.x)+1.0)*0.5));
 '''
 
 fetch_top_bottom = '''
-    float down = step(0.0, -pt.y);
-    fragColor += tob * down * texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)*0.5,((-pt.z/pt.y)+HFRACX2_1)*IHFRACX2));
-    fragColor += tob * (1.0 - down) * texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)*0.5,((-pt.z/pt.y)+1.0)*IHFRACX2));
+    float up = step(0.0, pt.y);
+    fragColor += tob * up * texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)*0.5,((-pt.z/pt.y)+1.0)*IHFRACX2));
+    fragColor += tob * (1.0 - up) * texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)*0.5,((-pt.z/pt.y)+HFRACX2_1)*IHFRACX2));
 '''
 
 fetch_front_back = '''
-    float back = step(0.0, -pt.z);
-    fragColor += fob * back * texture(cubeBackImage, vec2(((pt.x/pt.z)+1.0)*0.5,((-pt.y/pt.z)+1.0)*0.5));
-    fragColor += fob * (1.0 - back) * texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)*0.5,((pt.y/pt.z)+1.0)*0.5));
+    float front = step(0.0, pt.z);
+    fragColor += fob * front * texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)*0.5,((pt.y/pt.z)+1.0)*0.5));
+    fragColor += fob * (1.0 - front) * texture(cubeBackImage, vec2(((pt.x/pt.z)+1.0)*0.5,((-pt.y/pt.z)+1.0)*0.5));
 }
 '''
 
 fetch_front_only = '''
-    fragColor += fob * texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)*0.5,((pt.y/pt.z)+1.0)*0.5));
+    fragColor += fob * step(0.0, pt.z) * texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)*0.5,((pt.y/pt.z)+1.0)*0.5));
 }
 '''
 
@@ -186,8 +186,17 @@ class Renderer:
         self.image_size = (self.scene.render.resolution_x, self.scene.render.resolution_y)
         self.resolution_percentage_origin = self.scene.render.resolution_percentage
         
-        self.side_resolution = int(max(self.image_size)+4-max(self.image_size)%4)/2 if max(self.image_size)%4 > 0\
-                               else int(max(self.image_size)/2)
+        self.base_resolution = max(self.image_size[0] * (90.0 / self.HFOV), self.image_size[1] * (90.0 / self.VFOV))
+        frac = max(hfrac, vfrac)
+        self.camera_shift = {
+            'top': [0.0, 0.5*(frac-1), self.base_resolution, frac*self.base_resolution],
+            'bottom': [0.0, 0.5*(1-frac), self.base_resolution, frac*self.base_resolution],
+            'left': [0.5*(1-frac), 0.0, frac*self.base_resolution, self.base_resolution],
+            'right': [0.5*(frac-1), 0.0, frac*self.base_resolution, self.base_resolution],
+            'front': [0.0, 0.0, self.base_resolution, self.base_resolution],
+            'back': [0.0, 0.0, self.base_resolution, self.base_resolution]
+        }
+        print(self.camera_shift)
         if self.is_stereo:
             self.view_format = self.scene.render.image_settings.views_format
             self.scene.render.image_settings.views_format = 'STEREO_3D'
@@ -195,14 +204,6 @@ class Renderer:
             self.scene.render.image_settings.stereo_3d_format.display_mode = 'TOPBOTTOM'
 
         self.direction_offsets = self.find_direction_offsets()
-        if self.no_back_image:
-            hfract = (self.HFOV-90)/180
-            vfract = (self.VFOV-90)/180
-            self.camera_shift = {'top':[0.0, 0.5*(vfract-1), self.side_resolution, vfract*self.side_resolution],\
-                                 'bottom':[0.0, 0.5*(1-vfract), self.side_resolution, vfract*self.side_resolution],\
-                                 'left':[0.5*(1-hfract), 0.0, hfract*self.side_resolution, self.side_resolution],\
-                                 'right':[0.5*(hfract-1), 0.0, hfract*self.side_resolution, self.side_resolution],\
-                                 'front':[0.0, 0.0, self.side_resolution, self.side_resolution]}
     
     
     def cubemap_to_panorama(self, imageList, outputName):
@@ -350,12 +351,12 @@ class Renderer:
         # Set the camera to the required postion    
         self.camera.rotation_euler = self.direction_offsets[direction]
         
-        if self.no_back_image:
-            self.camera.data.shift_x = self.camera_shift[direction][0]
-            self.camera.data.shift_y = self.camera_shift[direction][1]
-            self.scene.render.resolution_x = int(self.camera_shift[direction][2])
-            self.scene.render.resolution_y = int(self.camera_shift[direction][3])
-            self.scene.render.resolution_percentage = 100
+        self.camera.data.shift_x = self.camera_shift[direction][0]
+        self.camera.data.shift_y = self.camera_shift[direction][1]
+        self.scene.render.resolution_x = int(ceil(self.camera_shift[direction][2]))
+        self.scene.render.resolution_y = int(ceil(self.camera_shift[direction][3]))
+        print(f"res {self.scene.render.resolution_x}, {self.scene.render.resolution_y} {self.camera_shift[direction]}")
+        self.scene.render.resolution_percentage = 100
         
     def clean_up(self, context):
 
@@ -433,11 +434,11 @@ class Renderer:
             renderedImage.colorspace_settings.name='Linear'
             imageLen = len(renderedImage.pixels)
             if self.no_back_image and direction in {'top', 'bottom'}:
-                renderedImageL = bpy.data.images.new(nameL, self.side_resolution, int(self.side_resolution/2))
-                renderedImageR = bpy.data.images.new(nameR, self.side_resolution, int(self.side_resolution/2))
+                renderedImageL = bpy.data.images.new(nameL, self.base_resolution, int(self.base_resolution/2))
+                renderedImageR = bpy.data.images.new(nameR, self.base_resolution, int(self.base_resolution/2))
             else:
-                renderedImageL = bpy.data.images.new(nameL, self.side_resolution, self.side_resolution)
-                renderedImageR = bpy.data.images.new(nameR, self.side_resolution, self.side_resolution)
+                renderedImageL = bpy.data.images.new(nameL, self.base_resolution, self.base_resolution)
+                renderedImageR = bpy.data.images.new(nameR, self.base_resolution, self.base_resolution)
             
             # Split the render into two images
             buff = np.empty((imageLen,), dtype=np.float32)
@@ -494,13 +495,6 @@ class Renderer:
 
     def render_and_save(self):
 
-        # Set the render resolution dimensions to the maximum of the two input dimensions
-        self.scene.render.resolution_x = self.side_resolution
-        self.scene.render.resolution_y = self.side_resolution
-        self.scene.render.resolution_percentage = 100
-        self.camera.data.shift_x = 0
-        self.camera.data.shift_y = 0
-        
         frame_step = self.scene.frame_step
         
         # Render the images and return their names
