@@ -40,10 +40,7 @@ class RenderImage(Operator):
     def execute(self, context):
         print("eeVR: execute")
 
-        mode = context.scene.eeVR.renderModeEnum
-        HFOV = context.scene.eeVR.renderHFOV if mode == 'EQUI' else context.scene.eeVR.renderFOV
-        VFOV = context.scene.eeVR.renderVFOV
-        renderer = Renderer(context, False, mode, HFOV, VFOV)
+        renderer = Renderer(context, False)
         now = time.time()
         renderer.render_and_save()
         print(f"eeVR: {round(time.time() - now, 2)} seconds")
@@ -91,16 +88,13 @@ class RenderAnimation(Operator):
 
         context.scene.eeVR.cancel = False
 
-        mode = context.scene.eeVR.renderModeEnum
-        HFOV = context.scene.eeVR.renderHFOV if mode == 'EQUI' else context.scene.eeVR.renderFOV
-        VFOV = context.scene.eeVR.renderVFOV
         # knowing it's animation, creates folder outside vrrender class, pass folder name to it
         start_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
         folder_name = f"Render Result {start_time}/"
         path = bpy.path.abspath("//")
         os.makedirs(path+folder_name, exist_ok=True)
-        self.renderer = Renderer(context, True, mode, HFOV, VFOV, folder_name)
-
+        self.renderer = Renderer(context, True, folder_name)
+        
         self.frame_end = context.scene.frame_end
         frame_start = context.scene.frame_start
         context.scene.frame_set(frame_start)

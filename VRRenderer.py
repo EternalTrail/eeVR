@@ -8,7 +8,20 @@ from datetime import datetime
 from gpu_extras.batch import batch_for_shader
 
 commdef = '''
-#define PI 3.1415926535897932384626
+#define PI        3.1415926535897932384626
+#define HFOVFRAC  %f
+#define VFOVFRAC  %f
+#define HFRACX2_1 %f // HFOVFRAC * 2 - 1
+#define IHFRACX2  %f // 1 / (HFOVFRAC * 2)
+#define VFRACX2_1 %f // VFOVFRAC * 2 - 1
+#define IVFRACX2  %f // 1 / (VFOVFRAC * 2)
+#define HCLIP     %f
+#define VCLIP     %f
+
+vec2 plane_to_uv(vec2 plane_position)
+{
+    return (plane_position + vec2(1.0, 1.0)) * 0.5;
+}
 
 // Input cubemap textures
 uniform sampler2D cubeLeftImage;
@@ -17,11 +30,6 @@ uniform sampler2D cubeBottomImage;
 uniform sampler2D cubeTopImage;
 uniform sampler2D cubeBackImage;
 uniform sampler2D cubeFrontImage;
-
-const float hfovfrac = %f;
-const float vfovfrac = %f;
-const float sidefracx2_1 = %f;
-const float invsidefracx2 = %f;
 
 in vec2 vTexCoord;
 
@@ -36,8 +44,9 @@ dome = '''
     float r = length(d);
     if(r > 1.0) discard;
     
+    // Calculate the position on unit sphere
     vec2 dunit = normalize(d);
-    float phi = hfovfrac*r*PI;
+    float phi = HFOVFRAC*PI*r;
     vec3 pt;
     %s
     pt.z = cos(phi);
@@ -53,15 +62,16 @@ domemodes = [
 
 equi = '''
     // Calculate the pointing angle
-    float azimuth = vTexCoord.x * PI * hfovfrac;
-    float elevation = vTexCoord.y * PI * vfovfrac / 2.0;
+    float azimuth = vTexCoord.x * HFOVFRAC * PI;
+    if(abs(azimuth) > PI * HFOVFRAC * HCLIP) discard;
+    float elevation = vTexCoord.y * VFOVFRAC * PI;
     
-    // Calculate the pointing vector
+    // Calculate the position on unit sphere
     vec3 pt;
     pt.x = cos(elevation) * sin(azimuth);
     pt.y = sin(elevation);
     pt.z = cos(elevation) * cos(azimuth);
-
+    if(abs(pt.y) > VCLIP) discard;
 '''
 
 fetch_setup = '''
@@ -76,14 +86,14 @@ fetch_setup = '''
 
 fetch_sides = '''
     float left = step(0.0, -pt.x);
-    fragColor += lor * left * texture(cubeLeftImage, vec2(((-pt.z/pt.x)+sidefracx2_1)*invsidefracx2,((-pt.y/pt.x)+1.0)*0.5));
-    fragColor += lor * (1.0 - left) * texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0)*invsidefracx2,((pt.y/pt.x)+1.0)*0.5));
+    fragColor += lor * left * texture(cubeLeftImage, vec2(((-pt.z/pt.x)+HFRACX2_1)*IHFRACX2,((-pt.y/pt.x)+1.0)*0.5));
+    fragColor += lor * (1.0 - left) * texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0)*IHFRACX2,((pt.y/pt.x)+1.0)*0.5));
 '''
 
 fetch_top_bottom = '''
     float down = step(0.0, -pt.y);
-    fragColor += tob * down * texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)*0.5,((-pt.z/pt.y)+sidefracx2_1)*invsidefracx2));
-    fragColor += tob * (1.0 - down) * texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)*0.5,((-pt.z/pt.y)+1.0)*invsidefracx2));
+    fragColor += tob * down * texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)*0.5,((-pt.z/pt.y)+HFRACX2_1)*IHFRACX2));
+    fragColor += tob * (1.0 - down) * texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)*0.5,((-pt.z/pt.y)+1.0)*IHFRACX2));
 '''
 
 fetch_front_back = '''
@@ -94,18 +104,20 @@ fetch_front_back = '''
 '''
 
 fetch_front_only = '''
-    fragColor += fob * texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)/2.0,((pt.y/pt.z)+1.0)/2.0));
+    fragColor += fob * texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)*0.5,((pt.y/pt.z)+1.0)*0.5));
 }
 '''
 
 class Renderer:
     
-    def __init__(self, context, is_animation = False, mode = 'EQUI', HFOV = 180, VFOV = 180, folder = ''):
+    def __init__(self, context, is_animation = False, folder = ''):
         
         # Check if the file is saved or not, can cause errors when not saved
         if not bpy.data.is_saved:
             raise PermissionError("Save file before rendering")
         
+        eeVR = context.scene.eeVR
+
         # Set internal variables for the class
         self.scene = context.scene
         # save original active object
@@ -127,23 +139,28 @@ class Renderer:
         self.path = bpy.path.abspath("//")
         self.is_stereo = context.scene.render.use_multiview
         self.is_animation = is_animation
-        self.HFOV = min(max(HFOV, 1), 360)
-        self.VFOV = min(max(VFOV, 1), 180)
-        self.no_back_image = (self.HFOV <= 270)
-        self.no_side_images = (self.HFOV <= 90)
-        self.no_top_bottom_images = (self.VFOV <= 90)
-        self.is_dome = (mode == 'DOME')
+        self.HFOV = min(max(eeVR.renderHFOV if eeVR.renderModeEnum == 'EQUI' else eeVR.renderFOV, 1), 360)
+        self.VFOV = min(max(eeVR.renderVFOV, 1), 180)
+        self.no_back_image = (self.HFOV * eeVR.renderHFill <= 270)
+        self.no_side_images = (self.HFOV * eeVR.renderHFill <= 90)
+        self.no_top_bottom_images = (self.VFOV * eeVR.renderVFill <= 90)
+        self.is_dome = (eeVR.renderModeEnum == 'DOME')
         self.domeMode = bpy.context.scene.eeVR.domeModeEnum
         self.createdFiles = set()
         
+        # Generate fragment shader code
         hfovfrac = self.HFOV / 360.0
-        vfovfrac = self.VFOV / 180.0
-        sidefrac = min(1.0, (self.HFOV - 90.0) / 180.0)
-        sidefracx2_1 = 2.0*sidefrac-1
-        invsidefracx2 = 1/(2.0*sidefrac)
-        # Generate shader code
+        vfovfrac = self.VFOV / 360.0
+        hfrac = min(1.0, (self.HFOV - 90.0) / 180.0)
+        hfracx2_1 = 2.0*hfrac-1
+        ihfracx2 = 1/(2.0*hfrac)
+        vfrac = min(1.0, (self.VFOV - 90.0) / 180.0)
+        vfracx2_1 = 2.0*vfrac-1
+        ivfracx2 = 1/(2.0*vfrac)
+        hclip = eeVR.renderHFill
+        vclip = eeVR.renderVFill
         self.frag_shader = \
-           (commdef % (hfovfrac, vfovfrac, sidefracx2_1, invsidefracx2))\
+           (commdef % (hfovfrac, vfovfrac, hfracx2_1, ihfracx2, vfracx2_1, ivfracx2, hclip, vclip))\
          + (dome % domemodes[int(self.domeMode)] if self.is_dome else equi)\
          + fetch_setup\
          + ('' if self.no_side_images else fetch_sides)\
@@ -179,11 +196,12 @@ class Renderer:
 
         self.direction_offsets = self.find_direction_offsets()
         if self.no_back_image:
-            fract = (self.HFOV-90)/180
-            self.camera_shift = {'top':[0.0, 0.5*(fract-1), self.side_resolution, fract*self.side_resolution],\
-                                 'bottom':[0.0, 0.5*(1-fract), self.side_resolution, fract*self.side_resolution],\
-                                 'left':[0.5*(1-fract), 0.0, fract*self.side_resolution, self.side_resolution],\
-                                 'right':[0.5*(fract-1), 0.0, fract*self.side_resolution, self.side_resolution],\
+            hfract = (self.HFOV-90)/180
+            vfract = (self.VFOV-90)/180
+            self.camera_shift = {'top':[0.0, 0.5*(vfract-1), self.side_resolution, vfract*self.side_resolution],\
+                                 'bottom':[0.0, 0.5*(1-vfract), self.side_resolution, vfract*self.side_resolution],\
+                                 'left':[0.5*(1-hfract), 0.0, hfract*self.side_resolution, self.side_resolution],\
+                                 'right':[0.5*(hfract-1), 0.0, hfract*self.side_resolution, self.side_resolution],\
                                  'front':[0.0, 0.0, self.side_resolution, self.side_resolution]}
     
     
