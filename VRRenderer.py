@@ -482,8 +482,6 @@ class Renderer:
             image_list_1.insert(0, img1)
             image_list_2.insert(0, img2)
         
-        self.set_camera_direction('front')
-        
         return image_list_1, image_list_2
 
 
