@@ -10,15 +10,17 @@ from gpu_extras.batch import batch_for_shader
 commdef = '''
 #define PI       3.1415926535897932384626
 #define FOVFRAC  %f
-#define FRACX2_1 %f // ((FOV - 90) / 180) * 2 - 1
-#define IFRACX2  %f // 1 / (((FOV - 90) / 180) * 2)
+#define SIDEFRAC %f
 #define HCLIP    %f
 #define VCLIP    %f
 #define MARGIN   %f
 
-vec2 plane_to_uv(vec2 plane_position)
+const float SIDEFRACX2_1 = SIDEFRAC * 2 - 1;
+const float INVSIDEFRACX2 = 1 / (SIDEFRAC * 2);
+
+vec2 to_uv(float x, float y)
 {
-    return (plane_position + vec2(1.0, 1.0)) * 0.5;
+    return vec2((x + 1.0f) * 0.5, (y + 1.0f) * 0.5);
 }
 
 // Input cubemap textures
@@ -84,25 +86,25 @@ fetch_setup = '''
 
 fetch_sides = '''
     float right = step(0.0, pt.x);
-    fragColor += lor * right * texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0)*IFRACX2,((pt.y/pt.x)+1.0)*0.5));
-    fragColor += lor * (1.0 - right) * texture(cubeLeftImage, vec2(((-pt.z/pt.x)+FRACX2_1)*IFRACX2,((-pt.y/pt.x)+1.0)*0.5));
+    fragColor += lor * right * texture(cubeRightImage, to_uv(-pt.z/pt.x, pt.y/pt.x) * vec2(2*INVSIDEFRACX2, 1));
+    fragColor += lor * (1.0 - right) * texture(cubeLeftImage, vec2(((-pt.z/pt.x)+SIDEFRACX2_1)*INVSIDEFRACX2,((-pt.y/pt.x)+1.0)*0.5));
 '''
 
 fetch_top_bottom = '''
     float up = step(0.0, pt.y);
-    fragColor += tob * up * texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)*0.5,((-pt.z/pt.y)+1.0)*IFRACX2));
-    fragColor += tob * (1.0 - up) * texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)*0.5,((-pt.z/pt.y)+FRACX2_1)*IFRACX2));
+    fragColor += tob * up * texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)*0.5,((-pt.z/pt.y)+1.0)*INVSIDEFRACX2));
+    fragColor += tob * (1.0 - up) * texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)*0.5,((-pt.z/pt.y)+SIDEFRACX2_1)*INVSIDEFRACX2));
 '''
 
 fetch_front_back = '''
     float front = step(0.0, pt.z);
-    fragColor += fob * front * texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)*0.5,((pt.y/pt.z)+1.0)*0.5));
-    fragColor += fob * (1.0 - front) * texture(cubeBackImage, vec2(((pt.x/pt.z)+1.0)*0.5,((-pt.y/pt.z)+1.0)*0.5));
+    fragColor += fob * front * texture(cubeFrontImage, to_uv(pt.x/pt.z, pt.y/pt.z));
+    fragColor += fob * (1.0 - front) * texture(cubeBackImage, to_uv(pt.x/pt.z, -pt.y/pt.z));
 }
 '''
 
 fetch_front_only = '''
-    fragColor += fob * step(0.0, pt.z) * texture(cubeFrontImage, vec2(((pt.x/pt.z)+1.0)*0.5,((pt.y/pt.z)+1.0)*0.5));
+    fragColor += fob * step(0.0, pt.z) * texture(cubeFrontImage, to_uv(pt.x/pt.z, pt.y/pt.z));
 }
 '''
 
@@ -149,15 +151,13 @@ class Renderer:
         
         # Generate fragment shader code
         fovfrac = self.FOV / 360.0
-        frac = (self.FOV - 90.0) / 180.0
-        fracx2_1 = 2.0*frac-1
-        ifracx2 = 1/(2.0*frac)
+        sidefrac = (self.FOV - 90.0) / 180.0
         hclip = self.HFOV / self.FOV
         vclip = self.VFOV / 180.0
         margin = eeVR.stitchMargin / 180.0
-        print(fovfrac, fracx2_1, ifracx2, hclip, vclip, margin)
+        print(fovfrac, sidefrac, hclip, vclip, margin)
         self.frag_shader = \
-           (commdef % (fovfrac, fracx2_1, ifracx2, hclip, vclip, margin))\
+           (commdef % (fovfrac, sidefrac, hclip, vclip, margin))\
          + (dome % domemodes[int(self.domeMethod)] if self.is_dome else equi)\
          + fetch_setup\
          + ('' if self.no_side_images else fetch_sides)\
@@ -187,10 +187,10 @@ class Renderer:
         self.image_size = int(ceil(self.scene.render.resolution_x * scale)), int(ceil(self.scene.render.resolution_y * scale))
         self.base_resolution = self.image_size[0] * (90.0 / self.FOV)
         self.camera_shift = {
-            'top': [0.0, 0.5*(frac-1), self.base_resolution, frac*self.base_resolution],
-            'bottom': [0.0, 0.5*(1-frac), self.base_resolution, frac*self.base_resolution],
-            'left': [0.5*(1-frac), 0.0, frac*self.base_resolution, self.base_resolution],
-            'right': [0.5*(frac-1), 0.0, frac*self.base_resolution, self.base_resolution],
+            'top': [0.0, 0.5*(sidefrac-1), self.base_resolution, sidefrac*self.base_resolution],
+            'bottom': [0.0, 0.5*(1-sidefrac), self.base_resolution, sidefrac*self.base_resolution],
+            'left': [0.5*(1-sidefrac), 0.0, sidefrac*self.base_resolution, self.base_resolution],
+            'right': [0.5*(sidefrac-1), 0.0, sidefrac*self.base_resolution, self.base_resolution],
             'front': [0.0, 0.0, self.base_resolution, self.base_resolution],
             'back': [0.0, 0.0, self.base_resolution, self.base_resolution]
         }
