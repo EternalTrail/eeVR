@@ -8,15 +8,13 @@ from datetime import datetime
 from gpu_extras.batch import batch_for_shader
 
 commdef = '''
-#define PI        3.1415926535897932384626
-#define HFOVFRAC  %f
-#define VFOVFRAC  %f
-#define HFRACX2_1 %f // ((HFOV - 90) / 180) * 2 - 1
-#define IHFRACX2  %f // 1 / (((HFOV - 90) / 180) * 2)
-#define VFRACX2_1 %f // ((VFOV - 90) / 180) * 2 - 1
-#define IVFRACX2  %f // 1 / (((VFOV - 90) / 180) * 2)
-#define HCLIP     %f
-#define VCLIP     %f
+#define PI       3.1415926535897932384626
+#define FOVFRAC  %f
+#define FRACX2_1 %f // ((FOV - 90) / 180) * 2 - 1
+#define IFRACX2  %f // 1 / (((FOV - 90) / 180) * 2)
+#define HCLIP    %f
+#define VCLIP    %f
+#define MARGIN   %f
 
 vec2 plane_to_uv(vec2 plane_position)
 {
@@ -46,7 +44,7 @@ dome = '''
     
     // Calculate the position on unit sphere
     vec2 dunit = normalize(d);
-    float phi = HFOVFRAC*PI*r;
+    float phi = FOVFRAC * PI * r;
     vec3 pt;
     %s
     pt.z = cos(phi);
@@ -62,9 +60,9 @@ domemodes = [
 
 equi = '''
     // Calculate the pointing angle
-    float azimuth = vTexCoord.x * HFOVFRAC * PI;
-    if(abs(azimuth) > PI * HFOVFRAC * HCLIP) discard;
-    float elevation = vTexCoord.y * VFOVFRAC * PI;
+    float azimuth = FOVFRAC * PI * vTexCoord.x;
+    if(abs(azimuth) > PI * FOVFRAC * HCLIP) discard;
+    float elevation = 0.5 * PI * vTexCoord.y;
     
     // Calculate the position on unit sphere
     vec3 pt;
@@ -86,14 +84,14 @@ fetch_setup = '''
 
 fetch_sides = '''
     float right = step(0.0, pt.x);
-    fragColor += lor * right * texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0)*IHFRACX2,((pt.y/pt.x)+1.0)*0.5));
-    fragColor += lor * (1.0 - right) * texture(cubeLeftImage, vec2(((-pt.z/pt.x)+HFRACX2_1)*IHFRACX2,((-pt.y/pt.x)+1.0)*0.5));
+    fragColor += lor * right * texture(cubeRightImage, vec2(((-pt.z/pt.x)+1.0)*IFRACX2,((pt.y/pt.x)+1.0)*0.5));
+    fragColor += lor * (1.0 - right) * texture(cubeLeftImage, vec2(((-pt.z/pt.x)+FRACX2_1)*IFRACX2,((-pt.y/pt.x)+1.0)*0.5));
 '''
 
 fetch_top_bottom = '''
     float up = step(0.0, pt.y);
-    fragColor += tob * up * texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)*0.5,((-pt.z/pt.y)+1.0)*IHFRACX2));
-    fragColor += tob * (1.0 - up) * texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)*0.5,((-pt.z/pt.y)+HFRACX2_1)*IHFRACX2));
+    fragColor += tob * up * texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)*0.5,((-pt.z/pt.y)+1.0)*IFRACX2));
+    fragColor += tob * (1.0 - up) * texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)*0.5,((-pt.z/pt.y)+FRACX2_1)*IFRACX2));
 '''
 
 fetch_front_back = '''
@@ -139,29 +137,28 @@ class Renderer:
         self.path = bpy.path.abspath("//")
         self.is_stereo = context.scene.render.use_multiview
         self.is_animation = is_animation
-        self.HFOV = min(max(eeVR.renderHFOV if eeVR.renderModeEnum == 'EQUI' else eeVR.renderFOV, 1), 360)
-        self.VFOV = min(max(eeVR.renderVFOV, 1), 180)
-        self.no_back_image = (self.HFOV * eeVR.renderHFill <= 270)
-        self.no_side_images = (self.HFOV * eeVR.renderHFill <= 90)
-        self.no_top_bottom_images = (self.VFOV * eeVR.renderVFill <= 90)
+        self.FOV = min(max(eeVR.domeFOV, 180), 360) if eeVR.renderModeEnum == 'DOME' else float(eeVR.equiModeEnum)
+        self.HFOV = (self.FOV if eeVR.renderModeEnum =='DOME' else eeVR.equiHFOV)
+        self.VFOV = (self.FOV if eeVR.renderModeEnum =='DOME' else eeVR.equiVFOV)
+        self.no_back_image = (self.HFOV <= 270)
+        self.no_side_images = (self.HFOV <= 90)
+        self.no_top_bottom_images = (self.VFOV <= 90)
         self.is_dome = (eeVR.renderModeEnum == 'DOME')
-        self.domeMode = bpy.context.scene.eeVR.domeModeEnum
+        self.domeMethod = bpy.context.scene.eeVR.domeMethodEnum
         self.createdFiles = set()
         
         # Generate fragment shader code
-        hfovfrac = self.HFOV / 360.0
-        vfovfrac = self.VFOV / 360.0
-        hfrac = min(1.0, (self.HFOV - 90.0) / 180.0)
-        hfracx2_1 = 2.0*hfrac-1
-        ihfracx2 = 1/(2.0*hfrac)
-        vfrac = min(1.0, (self.VFOV - 90.0) / 180.0)
-        vfracx2_1 = 2.0*vfrac-1
-        ivfracx2 = 1/(2.0*vfrac)
-        hclip = eeVR.renderHFill
-        vclip = eeVR.renderVFill
+        fovfrac = self.FOV / 360.0
+        frac = (self.FOV - 90.0) / 180.0
+        fracx2_1 = 2.0*frac-1
+        ifracx2 = 1/(2.0*frac)
+        hclip = self.HFOV / self.FOV
+        vclip = self.VFOV / 180.0
+        margin = eeVR.stitchMargin / 180.0
+        print(fovfrac, fracx2_1, ifracx2, hclip, vclip, margin)
         self.frag_shader = \
-           (commdef % (hfovfrac, vfovfrac, hfracx2_1, ihfracx2, vfracx2_1, ivfracx2, hclip, vclip))\
-         + (dome % domemodes[int(self.domeMode)] if self.is_dome else equi)\
+           (commdef % (fovfrac, fracx2_1, ifracx2, hclip, vclip, margin))\
+         + (dome % domemodes[int(self.domeMethod)] if self.is_dome else equi)\
          + fetch_setup\
          + ('' if self.no_side_images else fetch_sides)\
          + ('' if self.no_top_bottom_images else fetch_top_bottom)\
@@ -181,13 +178,14 @@ class Renderer:
         self.camera.data.type = 'PANO'
         self.camera.data.stereo.convergence_mode = 'PARALLEL'
         self.camera.data.stereo.pivot = 'CENTER'
-        self.camera.data.angle = pi/2
+        self.camera.data.angle = pi / 2 + margin * pi
         
-        self.image_size = (self.scene.render.resolution_x, self.scene.render.resolution_y)
+        self.resolution_x_origin = self.scene.render.resolution_x
+        self.resolution_y_origin = self.scene.render.resolution_y
         self.resolution_percentage_origin = self.scene.render.resolution_percentage
-        
-        self.base_resolution = max(self.image_size[0] * (90.0 / self.HFOV), self.image_size[1] * (90.0 / self.VFOV))
-        frac = max(hfrac, vfrac)
+        scale = (self.resolution_percentage_origin / 100.0)
+        self.image_size = int(ceil(self.scene.render.resolution_x * scale)), int(ceil(self.scene.render.resolution_y * scale))
+        self.base_resolution = self.image_size[0] * (90.0 / self.FOV)
         self.camera_shift = {
             'top': [0.0, 0.5*(frac-1), self.base_resolution, frac*self.base_resolution],
             'bottom': [0.0, 0.5*(1-frac), self.base_resolution, frac*self.base_resolution],
@@ -364,8 +362,8 @@ class Renderer:
         context.view_layer.objects.active = self.viewlayer_active_object_origin
         context.scene.camera = self.camera_origin
         bpy.data.objects.remove(self.camera)
-        self.scene.render.resolution_x = self.image_size[0]
-        self.scene.render.resolution_y = self.image_size[1]
+        self.scene.render.resolution_x = self.resolution_x_origin
+        self.scene.render.resolution_y = self.resolution_y_origin
         self.scene.render.resolution_percentage = self.resolution_percentage_origin
         if self.is_stereo:
             self.scene.render.image_settings.views_format = self.view_format
@@ -433,12 +431,8 @@ class Renderer:
             renderedImage.name = name
             renderedImage.colorspace_settings.name='Linear'
             imageLen = len(renderedImage.pixels)
-            if self.no_back_image and direction in {'top', 'bottom'}:
-                renderedImageL = bpy.data.images.new(nameL, self.base_resolution, int(self.base_resolution/2))
-                renderedImageR = bpy.data.images.new(nameR, self.base_resolution, int(self.base_resolution/2))
-            else:
-                renderedImageL = bpy.data.images.new(nameL, self.base_resolution, self.base_resolution)
-                renderedImageR = bpy.data.images.new(nameR, self.base_resolution, self.base_resolution)
+            renderedImageL = bpy.data.images.new(nameL, self.scene.render.resolution_x, self.scene.render.resolution_y)
+            renderedImageR = bpy.data.images.new(nameR, self.scene.render.resolution_x, self.scene.render.resolution_y)
             
             # Split the render into two images
             buff = np.empty((imageLen,), dtype=np.float32)

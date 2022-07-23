@@ -36,6 +36,9 @@ def has_invalid_condition(self : 'Operator', context : 'Context'):
     if context.scene.camera == None:
         self.report({'ERROR'}, "eeVR ERROR : Scene camera is not set.")
         return True
+    if context.scene.render.use_multiview and (context.scene.eeVR.domeFOV if context.scene.eeVR.renderModeEnum == 'DOME' else context.scene.eeVR.equiHFOV) > 180:
+        self.report({'ERROR'}, "eeVR ERROR : cannot support stereo over 180° fov.")
+        return True
     return False
 
 
@@ -160,19 +163,12 @@ class ToolPanel(Panel):
         col = layout.column()
         col.prop(props, 'renderModeEnum')
         if props.renderModeEnum == 'DOME':
-            col.prop(props, 'domeModeEnum')
-            col.prop(props, 'renderFOV')
+            col.prop(props, 'domeMethodEnum')
+            col.prop(props, 'domeFOV')
         else:
-            col.prop(props, 'renderHFOV')
-            col.prop(props, 'renderHFill')
-            row = col.row()
-            row.alignment = 'RIGHT'
-            row.label(text=f"Actual Degree : {round(props.renderHFOV * props.renderHFill)}°")
-            col.prop(props, 'renderVFOV')
-            col.prop(props, 'renderVFill')
-            row = col.row()
-            row.alignment = 'RIGHT'
-            row.label(text=f"Actual Degree : {round(props.renderVFOV * props.renderVFill)}°")
+            col.prop(props, 'equiModeEnum')
+            col.prop(props, 'equiHFOV')
+            col.prop(props, 'equiVFOV')
         col.prop(props, 'stitchMargin')
         layout.separator()
         col = layout.column()
@@ -195,7 +191,7 @@ class Properties(bpy.types.PropertyGroup):
         name="Mode",
     )
 
-    domeModeEnum: bpy.props.EnumProperty(
+    domeMethodEnum: bpy.props.EnumProperty(
         items=[
             ("0", "Equidistant (VTA)", "Renders in equidistant dome projection"),
             ("1", "Hemispherical (VTH)", "Renders in hemispherical dome projection"),
@@ -206,7 +202,7 @@ class Properties(bpy.types.PropertyGroup):
         name="Method",
     )
 
-    renderFOV: bpy.props.FloatProperty(
+    domeFOV: bpy.props.FloatProperty(
         180.0,
         default=180.0,
         name="FOV",
@@ -215,7 +211,16 @@ class Properties(bpy.types.PropertyGroup):
         description="Field of view in degrees",
     )
 
-    renderHFOV: bpy.props.FloatProperty(
+    equiModeEnum: bpy.props.EnumProperty(
+        items=[
+            ("180", "180°", "VR 180"),
+            ("360", "360°", "VR 360 (not support stereo)"),
+        ],
+        default="180",
+        name="Mode",
+    )
+
+    equiHFOV: bpy.props.FloatProperty(
         180.0,
         default=180.0,
         name="Horizontal FOV",
@@ -224,31 +229,13 @@ class Properties(bpy.types.PropertyGroup):
         description="Horizontal Field of view in degrees",
     )
 
-    renderVFOV: bpy.props.FloatProperty(
+    equiVFOV: bpy.props.FloatProperty(
         180.0,
         default=180.0,
         name="Vertical FOV",
         min=90,
         max=180,
         description="Vertical Field of view in degrees",
-    )
-
-    renderHFill: bpy.props.FloatProperty(
-        1.0,
-        default=1.0,
-        name="Horizontal Fill Rate",
-        min=0.1,
-        max=1.0,
-        description="Horizontal Render Regeon in rate of Horizontal FOV",
-    )
-
-    renderVFill: bpy.props.FloatProperty(
-        1.0,
-        default=1.0,
-        name="Vertical Fill Rate",
-        min=0.1,
-        max=1.0,
-        description="Vertical Render Regeon in rate of Vertical FOV",
     )
 
     stitchMargin: bpy.props.FloatProperty(
