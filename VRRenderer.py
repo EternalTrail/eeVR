@@ -15,12 +15,46 @@ commdef = '''
 #define VCLIP    %f
 #define MARGIN   %f
 
-const float SIDEFRAC2 = SIDEFRAC * SIDEFRAC;
 const float INVSIDEFRAC = 1 / SIDEFRAC;
+
+vec2 tr(vec2 src, vec2 offset, vec2 scale)
+{
+    return (src + offset) * scale;
+}
 
 vec2 to_uv(float x, float y)
 {
-    return vec2((x + 1.0f) * 0.5, (y + 1.0f) * 0.5);
+    return tr(vec2(x, y), vec2(1.0f, 1.0f), vec2(0.5, 0.5));
+}
+
+vec2 to_uv_right(vec3 pt)
+{
+    return to_uv(-pt.z/pt.x, pt.y/pt.x) * vec2(INVSIDEFRAC, 1);
+}
+
+vec2 to_uv_left(vec3 pt)
+{
+    return (to_uv(-pt.z/pt.x, -pt.y/pt.x) + vec2(SIDEFRAC - 1, 0)) * vec2(INVSIDEFRAC, 1);
+}
+
+vec2 to_uv_top(vec3 pt)
+{
+    return to_uv(pt.x/pt.y, -pt.z/pt.y) * vec2(1, INVSIDEFRAC);
+}
+
+vec2 to_uv_bottom(vec3 pt)
+{
+    return (to_uv(-pt.x/pt.y, -pt.z/pt.y) + vec2(0, SIDEFRAC - 1)) * vec2(1, INVSIDEFRAC);
+}
+
+vec2 to_uv_front(vec3 pt)
+{
+    return to_uv(pt.x/pt.z, pt.y/pt.z);
+}
+
+vec2 to_uv_back(vec3 pt)
+{
+    return to_uv(pt.x/pt.z, -pt.y/pt.z);
 }
 
 // Input cubemap textures
@@ -86,25 +120,25 @@ fetch_setup = '''
 
 fetch_sides = '''
     float right = step(0.0, pt.x);
-    fragColor += lor * right * texture(cubeRightImage, to_uv(-pt.z/pt.x, pt.y/pt.x) * vec2(INVSIDEFRAC, 1));
-    fragColor += lor * (1.0 - right) * texture(cubeLeftImage, (to_uv(-pt.z/pt.x, -pt.y/pt.x) + vec2(SIDEFRAC - 1, 0)) * vec2(INVSIDEFRAC, 1));
+    fragColor += lor * right * texture(cubeRightImage, to_uv_right(pt));
+    fragColor += lor * (1.0 - right) * texture(cubeLeftImage, to_uv_left(pt));
 '''
 
 fetch_top_bottom = '''
     float up = step(0.0, pt.y);
-    fragColor += tob * up * texture(cubeTopImage, to_uv(pt.x/pt.y, -pt.z/pt.y) * vec2(1, INVSIDEFRAC));
-    fragColor += tob * (1.0 - up) * texture(cubeBottomImage, (to_uv(-pt.x/pt.y, -pt.z/pt.y) + vec2(0, SIDEFRAC - 1)) * vec2(1, INVSIDEFRAC));
+    fragColor += tob * up * texture(cubeTopImage, to_uv_top(pt));
+    fragColor += tob * (1.0 - up) * texture(cubeBottomImage, to_uv_bottom(pt));
 '''
 
 fetch_front_back = '''
     float front = step(0.0, pt.z);
-    fragColor += fob * front * texture(cubeFrontImage, to_uv(pt.x/pt.z, pt.y/pt.z));
-    fragColor += fob * (1.0 - front) * texture(cubeBackImage, to_uv(pt.x/pt.z, -pt.y/pt.z));
+    fragColor += fob * front * texture(cubeFrontImage, to_uv_front(pt));
+    fragColor += fob * (1.0 - front) * texture(cubeBackImage, to_uv_back(pt));
 }
 '''
 
 fetch_front_only = '''
-    fragColor += fob * step(0.0, pt.z) * texture(cubeFrontImage, to_uv(pt.x/pt.z, pt.y/pt.z));
+    fragColor += fob * step(0.0, pt.z) * texture(cubeFrontImage, to_uv_front(pt));
 }
 '''
 
