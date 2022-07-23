@@ -36,7 +36,13 @@ def has_invalid_condition(self : 'Operator', context : 'Context'):
     if context.scene.camera == None:
         self.report({'ERROR'}, "eeVR ERROR : Scene camera is not set.")
         return True
-    if context.scene.render.use_multiview and (context.scene.eeVR.domeFOV if context.scene.eeVR.renderModeEnum == 'DOME' else context.scene.eeVR.equiHFOV) > 180:
+    if context.scene.render.use_multiview:
+        if context.scene.eeVR.renderModeEnum == 'DOME':
+            if context.scene.eeVR.domeFOV <= 180:
+                return False
+        else:
+            if context.scene.eeVR.equiModeEnum == "180":
+                return False
         self.report({'ERROR'}, "eeVR ERROR : cannot support stereo over 180° fov.")
         return True
     return False
@@ -167,7 +173,10 @@ class ToolPanel(Panel):
             col.prop(props, 'domeFOV')
         else:
             col.prop(props, 'equiModeEnum')
-            col.prop(props, 'equiHFOV')
+            if props.equiModeEnum == '180':
+                col.prop(props, 'equi180HFOV')
+            else:
+                col.prop(props, 'equi360HFOV')
             col.prop(props, 'equiVFOV')
         col.prop(props, 'stitchMargin')
         layout.separator()
@@ -220,11 +229,20 @@ class Properties(bpy.types.PropertyGroup):
         name="Mode",
     )
 
-    equiHFOV: bpy.props.FloatProperty(
+    equi180HFOV: bpy.props.FloatProperty(
         180.0,
         default=180.0,
         name="Horizontal FOV",
         min=90,
+        max=180,
+        description="Horizontal Field of view in degrees",
+    )
+
+    equi360HFOV: bpy.props.FloatProperty(
+        360.0,
+        default=360.0,
+        name="Horizontal FOV",
+        min=181,
         max=360,
         description="Horizontal Field of view in degrees",
     )

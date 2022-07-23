@@ -15,6 +15,7 @@ commdef = '''
 #define VCLIP    %f
 #define MARGIN   %f
 
+const float SIDEFRAC2 = SIDEFRAC * SIDEFRAC;
 const float INVSIDEFRAC = 1 / SIDEFRAC;
 
 vec2 to_uv(float x, float y)
@@ -91,7 +92,7 @@ fetch_sides = '''
 
 fetch_top_bottom = '''
     float up = step(0.0, pt.y);
-    fragColor += tob * up * texture(cubeTopImage, to_uv(pt.x/pt.y, -pt.z/pt.y) * vec2(1, 2*INVSIDEFRACX2));
+    fragColor += tob * up * texture(cubeTopImage, to_uv(pt.x/pt.y, -pt.z/pt.y) * vec2(1, INVSIDEFRAC));
     fragColor += tob * (1.0 - up) * texture(cubeBottomImage, (to_uv(-pt.x/pt.y, -pt.z/pt.y) + vec2(0, SIDEFRAC - 1)) * vec2(1, INVSIDEFRAC));
 '''
 
@@ -138,19 +139,23 @@ class Renderer:
         self.path = bpy.path.abspath("//")
         self.is_stereo = context.scene.render.use_multiview
         self.is_animation = is_animation
-        self.FOV = min(max(eeVR.domeFOV, 180), 360) if eeVR.renderModeEnum == 'DOME' else float(eeVR.equiModeEnum)
-        self.HFOV = (self.FOV if eeVR.renderModeEnum == 'DOME' else min(eeVR.equiHFOV, self.FOV))
+        self.is_dome = (eeVR.renderModeEnum == 'DOME')
+        self.domeMethod = bpy.context.scene.eeVR.domeMethodEnum
+        if self.is_dome:
+            self.FOV = min(max(eeVR.domeFOV, 180), 360)
+        else:
+            self.FOV = 180.0 if eeVR.equiModeEnum == "180" else eeVR.equi360HFOV
+        equiHFOV = eeVR.equi180HFOV if eeVR.equiModeEnum == "180" else eeVR.equi360HFOV
+        self.HFOV = (self.FOV if eeVR.renderModeEnum == 'DOME' else equiHFOV)
         self.VFOV = (self.FOV if eeVR.renderModeEnum =='DOME' else eeVR.equiVFOV)
         self.no_back_image = (self.HFOV <= 270)
         self.no_side_images = (self.HFOV <= 90)
         self.no_top_bottom_images = (self.VFOV <= 90)
-        self.is_dome = (eeVR.renderModeEnum == 'DOME')
-        self.domeMethod = bpy.context.scene.eeVR.domeMethodEnum
         self.createdFiles = set()
         
         # Generate fragment shader code
         fovfrac = self.FOV / 360.0
-        sidefrac = (self.FOV - 90.0) / 180.0
+        sidefrac = min(1, (self.FOV - 90.0) / 180.0)
         hclip = self.HFOV / self.FOV
         vclip = self.VFOV / 180.0
         margin = eeVR.stitchMargin / 180.0
