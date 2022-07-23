@@ -15,8 +15,7 @@ commdef = '''
 #define VCLIP    %f
 #define MARGIN   %f
 
-const float SIDEFRACX2_1 = SIDEFRAC * 2 - 1;
-const float INVSIDEFRACX2 = 1 / (SIDEFRAC * 2);
+const float INVSIDEFRAC = 1 / SIDEFRAC;
 
 vec2 to_uv(float x, float y)
 {
@@ -86,14 +85,14 @@ fetch_setup = '''
 
 fetch_sides = '''
     float right = step(0.0, pt.x);
-    fragColor += lor * right * texture(cubeRightImage, to_uv(-pt.z/pt.x, pt.y/pt.x) * vec2(2*INVSIDEFRACX2, 1));
-    fragColor += lor * (1.0 - right) * texture(cubeLeftImage, vec2(((-pt.z/pt.x)+SIDEFRACX2_1)*INVSIDEFRACX2,((-pt.y/pt.x)+1.0)*0.5));
+    fragColor += lor * right * texture(cubeRightImage, to_uv(-pt.z/pt.x, pt.y/pt.x) * vec2(INVSIDEFRAC, 1));
+    fragColor += lor * (1.0 - right) * texture(cubeLeftImage, (to_uv(-pt.z/pt.x, -pt.y/pt.x) + vec2(SIDEFRAC - 1, 0)) * vec2(INVSIDEFRAC, 1));
 '''
 
 fetch_top_bottom = '''
     float up = step(0.0, pt.y);
-    fragColor += tob * up * texture(cubeTopImage, vec2(((pt.x/pt.y)+1.0)*0.5,((-pt.z/pt.y)+1.0)*INVSIDEFRACX2));
-    fragColor += tob * (1.0 - up) * texture(cubeBottomImage, vec2(((-pt.x/pt.y)+1.0)*0.5,((-pt.z/pt.y)+SIDEFRACX2_1)*INVSIDEFRACX2));
+    fragColor += tob * up * texture(cubeTopImage, to_uv(pt.x/pt.y, -pt.z/pt.y) * vec2(1, 2*INVSIDEFRACX2));
+    fragColor += tob * (1.0 - up) * texture(cubeBottomImage, (to_uv(-pt.x/pt.y, -pt.z/pt.y) + vec2(0, SIDEFRAC - 1)) * vec2(1, INVSIDEFRAC));
 '''
 
 fetch_front_back = '''
@@ -140,7 +139,7 @@ class Renderer:
         self.is_stereo = context.scene.render.use_multiview
         self.is_animation = is_animation
         self.FOV = min(max(eeVR.domeFOV, 180), 360) if eeVR.renderModeEnum == 'DOME' else float(eeVR.equiModeEnum)
-        self.HFOV = (self.FOV if eeVR.renderModeEnum =='DOME' else eeVR.equiHFOV)
+        self.HFOV = (self.FOV if eeVR.renderModeEnum == 'DOME' else min(eeVR.equiHFOV, self.FOV))
         self.VFOV = (self.FOV if eeVR.renderModeEnum =='DOME' else eeVR.equiVFOV)
         self.no_back_image = (self.HFOV <= 270)
         self.no_side_images = (self.HFOV <= 90)
