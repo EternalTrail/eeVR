@@ -22,39 +22,54 @@ vec2 tr(vec2 src, vec2 offset, vec2 scale)
     return (src + offset) * scale;
 }
 
+vec2 tr(vec2 src, vec2 offset, float scale)
+{
+    return (src + offset) * scale;
+}
+
+vec2 tr(vec2 src, float offset, float scale)
+{
+    return tr(src, vec2(offset, offset), scale);
+}
+
+vec2 apply_margin(vec2 src)
+{
+    return tr(src, MARGIN, 1 - 2 * MARGIN);
+}
+
 vec2 to_uv(float x, float y)
 {
-    return tr(vec2(x, y), vec2(1.0f, 1.0f), vec2(0.5, 0.5));
+    return apply_margin(tr(vec2(x, y), vec2(1.0f, 1.0f), vec2(0.5, 0.5)));
 }
 
 vec2 to_uv_right(vec3 pt)
 {
-    return to_uv(-pt.z/pt.x, pt.y/pt.x) * vec2(INVSIDEFRAC, 1);
+    return apply_margin(to_uv(-pt.z/pt.x, pt.y/pt.x) * vec2(INVSIDEFRAC, 1));
 }
 
 vec2 to_uv_left(vec3 pt)
 {
-    return (to_uv(-pt.z/pt.x, -pt.y/pt.x) + vec2(SIDEFRAC - 1, 0)) * vec2(INVSIDEFRAC, 1);
+    return apply_margin(tr(to_uv(-pt.z/pt.x, -pt.y/pt.x), vec2(SIDEFRAC - 1, 0), vec2(INVSIDEFRAC, 1)));
 }
 
 vec2 to_uv_top(vec3 pt)
 {
-    return to_uv(pt.x/pt.y, -pt.z/pt.y) * vec2(1, INVSIDEFRAC);
+    return apply_margin(to_uv(pt.x/pt.y, -pt.z/pt.y) * vec2(1, INVSIDEFRAC));
 }
 
 vec2 to_uv_bottom(vec3 pt)
 {
-    return (to_uv(-pt.x/pt.y, -pt.z/pt.y) + vec2(0, SIDEFRAC - 1)) * vec2(1, INVSIDEFRAC);
+    return apply_margin(tr(to_uv(-pt.x/pt.y, -pt.z/pt.y), vec2(0, SIDEFRAC - 1), vec2(1, INVSIDEFRAC)));
 }
 
 vec2 to_uv_front(vec3 pt)
 {
-    return to_uv(pt.x/pt.z, pt.y/pt.z);
+    return apply_margin(to_uv(pt.x/pt.z, pt.y/pt.z));
 }
 
 vec2 to_uv_back(vec3 pt)
 {
-    return to_uv(pt.x/pt.z, -pt.y/pt.z);
+    return apply_margin(to_uv(pt.x/pt.z, -pt.y/pt.z));
 }
 
 // Input cubemap textures
