@@ -223,7 +223,7 @@ class Properties(bpy.types.PropertyGroup):
     equiModeEnum: bpy.props.EnumProperty(
         items=[
             ("180", "180°", "VR 180"),
-            ("360", "360°", "VR 360 (not support stereo)"),
+            ("360", "360° (>= 180°)", "VR 360 (not support stereo)"),
         ],
         default="180",
         name="Mode",
@@ -257,8 +257,8 @@ class Properties(bpy.types.PropertyGroup):
     )
 
     stitchMargin: bpy.props.FloatProperty(
-        6.0,
-        default=6.0,
+        0.0,
+        default=0.0,
         name="Stitch Margin",
         min=0,
         max=45,

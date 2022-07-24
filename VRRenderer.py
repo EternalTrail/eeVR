@@ -1,9 +1,10 @@
 import bpy
+import os
 import time
 import gpu
 import bgl
 import numpy as np
-from math import sin, cos, pi, ceil
+from math import sin, cos, tan, pi, ceil, radians
 from datetime import datetime
 from gpu_extras.batch import batch_for_shader
 
@@ -11,11 +12,13 @@ commdef = '''
 #define PI       3.1415926535897932384626
 #define FOVFRAC  %f
 #define SIDEFRAC %f
+#define TBFRAC   %f
 #define HCLIP    %f
 #define VCLIP    %f
 #define MARGIN   %f
 
 const float INVSIDEFRAC = 1 / SIDEFRAC;
+const float INVTBFRAC = 1 / TBFRAC;
 
 vec2 tr(vec2 src, vec2 offset, vec2 scale)
 {
@@ -34,12 +37,12 @@ vec2 tr(vec2 src, float offset, float scale)
 
 vec2 apply_margin(vec2 src)
 {
-    return tr(src, MARGIN, 1 - 2 * MARGIN);
+    return src * (1 - 2 * MARGIN) + vec2(MARGIN, MARGIN);
 }
 
 vec2 to_uv(float x, float y)
 {
-    return apply_margin(tr(vec2(x, y), vec2(1.0f, 1.0f), vec2(0.5, 0.5)));
+    return tr(vec2(x, y), 1.0, 0.5);
 }
 
 vec2 to_uv_right(vec3 pt)
@@ -54,12 +57,12 @@ vec2 to_uv_left(vec3 pt)
 
 vec2 to_uv_top(vec3 pt)
 {
-    return apply_margin(to_uv(pt.x/pt.y, -pt.z/pt.y) * vec2(1, INVSIDEFRAC));
+    return apply_margin(to_uv(pt.x/pt.y, -pt.z/pt.y) * vec2(1, INVTBFRAC));
 }
 
 vec2 to_uv_bottom(vec3 pt)
 {
-    return apply_margin(tr(to_uv(-pt.x/pt.y, -pt.z/pt.y), vec2(0, SIDEFRAC - 1), vec2(1, INVSIDEFRAC)));
+    return apply_margin(tr(to_uv(-pt.x/pt.y, -pt.z/pt.y), vec2(0, TBFRAC - 1), vec2(1, INVTBFRAC)));
 }
 
 vec2 to_uv_front(vec3 pt)
@@ -157,6 +160,19 @@ fetch_front_only = '''
 }
 '''
 
+# Define the vertex shader
+vertex_shader = '''
+in vec3 aVertexPosition;
+in vec2 aVertexTextureCoord;
+
+out vec2 vTexCoord;
+
+void main() {
+    vTexCoord = aVertexTextureCoord;
+    gl_Position = vec4(aVertexPosition, 1);
+}
+'''
+
 class Renderer:
     
     def __init__(self, context, is_animation = False, folder = ''):
@@ -204,13 +220,19 @@ class Renderer:
         
         # Generate fragment shader code
         fovfrac = self.FOV / 360.0
-        sidefrac = min(1, (self.FOV - 90.0) / 180.0)
+        if self.HFOV > 270:
+            sidefrac = 1.0
+        elif self.HFOV > 180:
+            sidefrac = sin(radians(self.HFOV - 180)) * 0.5 + 0.5
+        else:
+            sidefrac = sin(radians(self.HFOV - 90)) * 0.5
+        tbfrac = max(sidefrac, sin(radians(self.VFOV - 90)) * 0.5)
         hclip = self.HFOV / self.FOV
         vclip = self.VFOV / 180.0
-        margin = eeVR.stitchMargin / 180.0
-        print(fovfrac, sidefrac, hclip, vclip, margin)
+        margin = 1.0 - 1.0 / tan(radians(45 + eeVR.stitchMargin))
+        print(fovfrac, sidefrac, tbfrac, hclip, vclip, margin)
         self.frag_shader = \
-           (commdef % (fovfrac, sidefrac, hclip, vclip, margin))\
+           (commdef % (fovfrac, sidefrac, tbfrac, hclip, vclip, margin))\
          + (dome % domemodes[int(self.domeMethod)] if self.is_dome else equi)\
          + fetch_setup\
          + ('' if self.no_side_images else fetch_sides)\
@@ -231,7 +253,7 @@ class Renderer:
         self.camera.data.type = 'PANO'
         self.camera.data.stereo.convergence_mode = 'PARALLEL'
         self.camera.data.stereo.pivot = 'CENTER'
-        self.camera.data.angle = pi / 2 + margin * pi
+        self.camera.data.angle = radians(90 + 2 * eeVR.stitchMargin)
         
         self.resolution_x_origin = self.scene.render.resolution_x
         self.resolution_y_origin = self.scene.render.resolution_y
@@ -240,8 +262,8 @@ class Renderer:
         self.image_size = int(ceil(self.scene.render.resolution_x * scale)), int(ceil(self.scene.render.resolution_y * scale))
         self.base_resolution = self.image_size[0] * (90.0 / self.FOV)
         self.camera_shift = {
-            'top': [0.0, 0.5*(sidefrac-1), self.base_resolution, sidefrac*self.base_resolution],
-            'bottom': [0.0, 0.5*(1-sidefrac), self.base_resolution, sidefrac*self.base_resolution],
+            'top': [0.0, 0.5*(tbfrac-1), self.base_resolution, tbfrac*self.base_resolution],
+            'bottom': [0.0, 0.5*(1-tbfrac), self.base_resolution, tbfrac*self.base_resolution],
             'left': [0.5*(1-sidefrac), 0.0, sidefrac*self.base_resolution, self.base_resolution],
             'right': [0.5*(sidefrac-1), 0.0, sidefrac*self.base_resolution, self.base_resolution],
             'front': [0.0, 0.0, self.base_resolution, self.base_resolution],
@@ -259,19 +281,6 @@ class Renderer:
     
     def cubemap_to_panorama(self, imageList, outputName):
         
-        # Define the vertex shader
-        vertex_shader = '''
-            in vec3 aVertexPosition;
-            in vec2 aVertexTextureCoord;
-
-            out vec2 vTexCoord;
-
-            void main() {
-                vTexCoord = aVertexTextureCoord;
-                gl_Position = vec4(aVertexPosition, 1);
-            }
-        '''
-        
         # Generate the OpenGL shader
         pos = [(-1.0, -1.0, -1.0),  # left,  bottom, back
                (-1.0,  1.0, -1.0),  # left,  top,    back
@@ -284,9 +293,10 @@ class Renderer:
         vertexIndices = [(0, 3, 1),(3, 0, 2)]
         shader = gpu.types.GPUShader(vertex_shader, self.frag_shader)
         
-        batch = batch_for_shader(shader, 'TRIS', {"aVertexPosition": pos,\
-                                                  "aVertexTextureCoord": coords},\
-                                                  indices=vertexIndices)
+        batch = batch_for_shader(shader, 'TRIS', {
+            "aVertexPosition": pos,
+            "aVertexTextureCoord": coords
+        }, indices=vertexIndices)
         
         # Change the color space of all of the images to Linear
         # and load them into OpenGL textures
@@ -408,7 +418,8 @@ class Renderer:
         self.scene.render.resolution_y = int(ceil(self.camera_shift[direction][3]))
         print(f"res {self.scene.render.resolution_x}, {self.scene.render.resolution_y} {self.camera_shift[direction]}")
         self.scene.render.resolution_percentage = 100
-        
+
+
     def clean_up(self, context):
 
         # Reset all the variables that were changed
@@ -466,7 +477,6 @@ class Renderer:
             renderedImageR.name = nameR
 
             self.scene.render.use_multiview = True
-            #self.camera_empty.location = tmp_loc
             self.camera.location = tmp_loc
         
         elif self.is_stereo:
