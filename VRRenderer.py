@@ -161,15 +161,22 @@ fetch_front_back = '''
 '''
 
 fetch_front_only = '''
-    {
-        vec2 uv = to_uv_front(pt);
-        fragColor += fob * front * texture(cubeFrontImage, uv);
-        float alpha = lor * right * smoothstep(1.0, 0.0, clamp((uv.x - MARGINSCALE - MARGIN) / MARGIN, 0.0, 1.0));
-        fragColor = (1.0 - alpha) * fragColor + alpha * texture(cubeFrontImage, uv);
-        
-        alpha = lor * (1.0 - right) * smoothstep(0.0, 1.0, clamp(uv.x / MARGIN, 0.0, 1.0));
-        fragColor = (1.0 - alpha) * fragColor + alpha * texture(cubeFrontImage, uv);
-    }
+    vec2 uv = to_uv_front(pt);
+    fragColor += fob * front * texture(cubeFrontImage, uv);
+
+    // Seam Blending
+
+    float alpha = lor * right * smoothstep(1.0, 0.0, clamp((uv.x - MARGINSCALE - MARGIN) / MARGIN, 0.0, 1.0));
+    fragColor = (1.0 - alpha) * fragColor + alpha * texture(cubeFrontImage, uv);
+    
+    alpha = lor * (1.0 - right) * smoothstep(0.0, 1.0, clamp(uv.x / MARGIN, 0.0, 1.0));
+    fragColor = (1.0 - alpha) * fragColor + alpha * texture(cubeFrontImage, uv);
+
+    alpha = tob * up * smoothstep(1.0, 0.0, clamp((uv.y - MARGINSCALE - MARGIN) / MARGIN, 0.0, 1.0));
+    fragColor = (1.0 - alpha) * fragColor + alpha * texture(cubeFrontImage, uv);
+
+    alpha = tob * (1.0 - up) * smoothstep(0.0, 1.0, clamp(uv.y / MARGIN, 0.0, 1.0));
+    fragColor = (1.0 - alpha) * fragColor + alpha * texture(cubeFrontImage, uv);
 }
 '''
 
