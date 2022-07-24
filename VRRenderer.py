@@ -71,6 +71,16 @@ vec2 to_uv_front(vec3 pt)
     return apply_margin(to_uv(pt.x/pt.z, pt.y/pt.z));
 }
 
+vec2 to_uv_front_right(vec3 pt)
+{
+    return apply_margin(to_uv(pt.x/pt.z, pt.y/pt.z) * vec2(-1, 1)) + vec2(MARGINSCALE, 0);
+}
+
+vec2 to_uv_front_left(vec3 pt)
+{
+    return apply_margin(to_uv(pt.x/pt.z, pt.y/pt.z) * vec2(-1, 1));
+}
+
 vec2 to_uv_back(vec3 pt)
 {
     return apply_margin(to_uv(pt.x/pt.z, -pt.y/pt.z));
@@ -145,8 +155,21 @@ fetch_setup = '''
 '''
 
 fetch_sides = '''
-    fragColor += lor * right * texture(cubeRightImage, to_uv_right(pt));
+    fragColor += 0.00001 * lor * right * texture(cubeRightImage, to_uv_right(pt));
     fragColor += lor * (1.0 - right) * texture(cubeLeftImage, to_uv_left(pt));
+
+    {
+        vec2 uv = to_uv_front_right(pt);
+        float alpha = lor * right * smoothstep(1.0, 0.0, clamp(0.0, 1.0, uv.x / MARGIN));
+        //fragColor = (1.0 - alpha) * fragColor + alpha * texture(cubeFrontImage, uv);
+        fragColor += lor * right * texture(cubeFrontImage, uv);
+    }
+
+    {
+        vec2 uv = to_uv_front_left(pt);
+        float alpha = lor * (1.0 - right) * smoothstep(1.0, 0.0, clamp(0.0, 1.0, uv.x / MARGIN));
+        fragColor = (1.0 - alpha) * fragColor + alpha * texture(cubeFrontImage, uv);
+    }
 '''
 
 fetch_top_bottom = '''
@@ -235,7 +258,8 @@ class Renderer:
         hclip = self.HFOV / self.FOV
         vclip = self.VFOV / 180.0
         margin = 0.5 - 0.5 / tan(radians(45 + eeVR.stitchMargin))
-        print(fovfrac, sidefrac, tbfrac, hclip, vclip, margin)
+        # margin = (tan(radians(frontfov/2)) - tan(radians(frontfov/2)) / tan(radians(frontfov/2 + eeVR.stitchMargin))) / 2
+        print(fovfrac, sidefrac, tbfrac, hclip, vclip, margin, 1 - 2 * margin)
         self.frag_shader = \
            (commdef % (fovfrac, sidefrac, tbfrac, hclip, vclip, margin))\
          + (dome % domemodes[int(self.domeMethod)] if self.is_dome else equi)\
