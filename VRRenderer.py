@@ -166,16 +166,17 @@ fetch_front_only = '''
 
     // Seam Blending
 
-    float alpha = lor * right * smoothstep(1.0, 0.0, clamp((uv.x - MARGINSCALE - MARGIN) / MARGIN, 0.0, 1.0));
+    float blend = step(0.0001, MARGIN);
+    float alpha = blend * lor * right * smoothstep(1.0, 0.0, clamp((uv.x - MARGINSCALE - MARGIN) / MARGIN, 0.0, 1.0));
     fragColor = (1.0 - alpha) * fragColor + alpha * texture(cubeFrontImage, uv);
     
-    alpha = lor * (1.0 - right) * smoothstep(0.0, 1.0, clamp(uv.x / MARGIN, 0.0, 1.0));
+    alpha = blend * lor * (1.0 - right) * smoothstep(0.0, 1.0, clamp(uv.x / MARGIN, 0.0, 1.0));
     fragColor = (1.0 - alpha) * fragColor + alpha * texture(cubeFrontImage, uv);
 
-    alpha = tob * up * smoothstep(1.0, 0.0, clamp((uv.y - MARGINSCALE - MARGIN) / MARGIN, 0.0, 1.0));
+    alpha = blend * tob * up * smoothstep(1.0, 0.0, clamp((uv.y - MARGINSCALE - MARGIN) / MARGIN, 0.0, 1.0));
     fragColor = (1.0 - alpha) * fragColor + alpha * texture(cubeFrontImage, uv);
 
-    alpha = tob * (1.0 - up) * smoothstep(0.0, 1.0, clamp(uv.y / MARGIN, 0.0, 1.0));
+    alpha = blend * tob * (1.0 - up) * smoothstep(0.0, 1.0, clamp(uv.y / MARGIN, 0.0, 1.0));
     fragColor = (1.0 - alpha) * fragColor + alpha * texture(cubeFrontImage, uv);
 }
 '''

@@ -257,8 +257,8 @@ class Properties(bpy.types.PropertyGroup):
     )
 
     stitchMargin: bpy.props.FloatProperty(
-        0.0,
-        default=0.0,
+        5.0,
+        default=5.0,
         name="Stitch Margin",
         min=0,
         max=45,
