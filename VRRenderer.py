@@ -71,16 +71,6 @@ vec2 to_uv_front(vec3 pt)
     return apply_margin(to_uv(pt.x/pt.z, pt.y/pt.z));
 }
 
-vec2 to_uv_front_right(vec3 pt)
-{
-    return apply_margin(to_uv(pt.x/pt.z, pt.y/pt.z) * vec2(-1, 1)) + vec2(MARGINSCALE, 0);
-}
-
-vec2 to_uv_front_left(vec3 pt)
-{
-    return apply_margin(to_uv(pt.x/pt.z, pt.y/pt.z) * vec2(-1, 1));
-}
-
 vec2 to_uv_back(vec3 pt)
 {
     return apply_margin(to_uv(pt.x/pt.z, -pt.y/pt.z));
@@ -155,21 +145,8 @@ fetch_setup = '''
 '''
 
 fetch_sides = '''
-    fragColor += 0.00001 * lor * right * texture(cubeRightImage, to_uv_right(pt));
+    fragColor += lor * right * texture(cubeRightImage, to_uv_right(pt));
     fragColor += lor * (1.0 - right) * texture(cubeLeftImage, to_uv_left(pt));
-
-    {
-        vec2 uv = to_uv_front_right(pt);
-        float alpha = lor * right * smoothstep(1.0, 0.0, clamp(0.0, 1.0, uv.x / MARGIN));
-        //fragColor = (1.0 - alpha) * fragColor + alpha * texture(cubeFrontImage, uv);
-        fragColor += lor * right * texture(cubeFrontImage, uv);
-    }
-
-    {
-        vec2 uv = to_uv_front_left(pt);
-        float alpha = lor * (1.0 - right) * smoothstep(1.0, 0.0, clamp(0.0, 1.0, uv.x / MARGIN));
-        fragColor = (1.0 - alpha) * fragColor + alpha * texture(cubeFrontImage, uv);
-    }
 '''
 
 fetch_top_bottom = '''
@@ -184,7 +161,15 @@ fetch_front_back = '''
 '''
 
 fetch_front_only = '''
-    fragColor += fob * front * texture(cubeFrontImage, to_uv_front(pt));
+    {
+        vec2 uv = to_uv_front(pt);
+        fragColor += fob * front * texture(cubeFrontImage, uv);
+        float alpha = lor * right * smoothstep(1.0, 0.0, clamp((uv.x - MARGINSCALE - MARGIN) / MARGIN, 0.0, 1.0));
+        fragColor = (1.0 - alpha) * fragColor + alpha * texture(cubeFrontImage, uv);
+        
+        alpha = lor * (1.0 - right) * smoothstep(0.0, 1.0, clamp(uv.x / MARGIN, 0.0, 1.0));
+        fragColor = (1.0 - alpha) * fragColor + alpha * texture(cubeFrontImage, uv);
+    }
 }
 '''
 
