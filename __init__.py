@@ -26,7 +26,7 @@ bl_info = {
     "location": "View3D > Tool Tab (Available when EEVEE or Workbench)",
     "warning": "This addon is still in early alpha, may break your blend file!",
     "wiki_url": "https://github.com/EternalTrail/eeVR",
-    "tracker_url": "https://github.com/EternalTrail/eeVR/issues",
+    "tracker_url": "https://github.com/SAM-tak/eeVR/issues",
     "support": "TESTING",
     "category": "Render",
 }
@@ -178,7 +178,7 @@ class ToolPanel(Panel):
             else:
                 col.prop(props, 'equi360HFOV')
             col.prop(props, 'equiVFOV')
-        # col.prop(props, 'stitchMargin')
+        col.prop(props, 'stitchMargin')
         layout.separator()
         col = layout.column()
         col.operator(RenderImage.bl_idname, text="Render Image")

@@ -19,6 +19,7 @@ commdef = '''
 
 const float INVSIDEFRAC = 1 / SIDEFRAC;
 const float INVTBFRAC = 1 / TBFRAC;
+const float MARGINSCALE = 1 - 2 * MARGIN;
 
 vec2 tr(vec2 src, vec2 offset, vec2 scale)
 {
@@ -35,34 +36,34 @@ vec2 tr(vec2 src, float offset, float scale)
     return tr(src, vec2(offset, offset), scale);
 }
 
-vec2 apply_margin(vec2 src)
-{
-    return src * (1 - 2 * MARGIN) + vec2(MARGIN, MARGIN);
-}
-
 vec2 to_uv(float x, float y)
 {
     return tr(vec2(x, y), 1.0, 0.5);
 }
 
+vec2 apply_margin(vec2 src)
+{
+    return src * MARGINSCALE + vec2(MARGIN, MARGIN);
+}
+
 vec2 to_uv_right(vec3 pt)
 {
-    return apply_margin(to_uv(-pt.z/pt.x, pt.y/pt.x) * vec2(INVSIDEFRAC, 1));
+    return to_uv(-pt.z/pt.x, pt.y/pt.x) * vec2(INVSIDEFRAC, 1);
 }
 
 vec2 to_uv_left(vec3 pt)
 {
-    return apply_margin(tr(to_uv(-pt.z/pt.x, -pt.y/pt.x), vec2(SIDEFRAC - 1, 0), vec2(INVSIDEFRAC, 1)));
+    return tr(to_uv(-pt.z/pt.x, -pt.y/pt.x), vec2(SIDEFRAC - 1, 0), vec2(INVSIDEFRAC, 1));
 }
 
 vec2 to_uv_top(vec3 pt)
 {
-    return apply_margin(to_uv(pt.x/pt.y, -pt.z/pt.y) * vec2(1, INVTBFRAC));
+    return to_uv(pt.x/pt.y, -pt.z/pt.y) * vec2(1, INVTBFRAC);
 }
 
 vec2 to_uv_bottom(vec3 pt)
 {
-    return apply_margin(tr(to_uv(-pt.x/pt.y, -pt.z/pt.y), vec2(0, TBFRAC - 1), vec2(1, INVTBFRAC)));
+    return tr(to_uv(-pt.x/pt.y, -pt.z/pt.y), vec2(0, TBFRAC - 1), vec2(1, INVTBFRAC));
 }
 
 vec2 to_uv_front(vec3 pt)
@@ -233,7 +234,7 @@ class Renderer:
         tbfrac = max(sidefrac, sin(radians(self.VFOV - 90)) * 0.5)
         hclip = self.HFOV / self.FOV
         vclip = self.VFOV / 180.0
-        margin = 1.0 - 1.0 / tan(radians(45 + eeVR.stitchMargin))
+        margin = 0.5 - 0.5 / tan(radians(45 + eeVR.stitchMargin))
         print(fovfrac, sidefrac, tbfrac, hclip, vclip, margin)
         self.frag_shader = \
            (commdef % (fovfrac, sidefrac, tbfrac, hclip, vclip, margin))\
@@ -257,7 +258,6 @@ class Renderer:
         self.camera.data.type = 'PANO'
         self.camera.data.stereo.convergence_mode = 'PARALLEL'
         self.camera.data.stereo.pivot = 'CENTER'
-        self.camera.data.angle = radians(90 + 2 * eeVR.stitchMargin)
         
         self.resolution_x_origin = self.scene.render.resolution_x
         self.resolution_y_origin = self.scene.render.resolution_y
@@ -416,13 +416,13 @@ class Renderer:
         
         # Set the camera to the required postion    
         self.camera.rotation_euler = self.direction_offsets[direction]
-        
+        self.camera.data.angle_x = radians(90) if direction != 'front' else radians(90 + 2 * self.scene.eeVR.stitchMargin)
         self.camera.data.shift_x = self.camera_shift[direction][0]
         self.camera.data.shift_y = self.camera_shift[direction][1]
         self.scene.render.resolution_x = int(ceil(self.camera_shift[direction][2]))
         self.scene.render.resolution_y = int(ceil(self.camera_shift[direction][3]))
-        print(f"res {self.scene.render.resolution_x}, {self.scene.render.resolution_y} {self.camera_shift[direction]}")
         self.scene.render.resolution_percentage = 100
+        # print(f"res {self.scene.render.resolution_x}, {self.scene.render.resolution_y} {self.camera_shift[direction]}")
 
 
     def clean_up(self, context):
