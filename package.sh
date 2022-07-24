@@ -1,1 +1,2 @@
-zip -FSr eeVR.zip . -x *.git -x *.gitignore -x *.github -x *__pycache__* -x *.vscode* -x */desktop.ini
+rm -f eeVR.zip
+git archive HEAD  --output eeVR.zip
