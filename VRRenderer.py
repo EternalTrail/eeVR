@@ -123,7 +123,6 @@ equi = '''
     pt.x = cos(elevation) * sin(azimuth);
     pt.y = sin(elevation);
     pt.z = cos(elevation) * cos(azimuth);
-    if(abs(pt.y) > VCLIP) discard;
 '''
 
 fetch_setup = '''
@@ -134,29 +133,34 @@ fetch_setup = '''
     float tob = (1.0 - lor) * step(abs(pt.z), abs(pt.y));
     // front or back
     float fob = (1.0 - lor) * (1.0 - tob);
+    float right = step(0.0, pt.x);
+    float up = step(0.0, pt.y);
+    float front = step(0.0, pt.z);
+    float angle = 0.0;
+    angle = fob * abs(pt.y/pt.z) * 0.5;
+    angle += lor * abs(pt.y/pt.x) * 0.5;
+    angle += tob * (2 - abs(pt.z/pt.y)) * 0.5;
+    if(angle > VCLIP) discard;
 '''
 
 fetch_sides = '''
-    float right = step(0.0, pt.x);
     fragColor += lor * right * texture(cubeRightImage, to_uv_right(pt));
     fragColor += lor * (1.0 - right) * texture(cubeLeftImage, to_uv_left(pt));
 '''
 
 fetch_top_bottom = '''
-    float up = step(0.0, pt.y);
     fragColor += tob * up * texture(cubeTopImage, to_uv_top(pt));
     fragColor += tob * (1.0 - up) * texture(cubeBottomImage, to_uv_bottom(pt));
 '''
 
 fetch_front_back = '''
-    float front = step(0.0, pt.z);
     fragColor += fob * front * texture(cubeFrontImage, to_uv_front(pt));
     fragColor += fob * (1.0 - front) * texture(cubeBackImage, to_uv_back(pt));
 }
 '''
 
 fetch_front_only = '''
-    fragColor += fob * step(0.0, pt.z) * texture(cubeFrontImage, to_uv_front(pt));
+    fragColor += fob * front * texture(cubeFrontImage, to_uv_front(pt));
 }
 '''
 
@@ -312,6 +316,7 @@ class Renderer:
         offscreen = gpu.types.GPUOffScreen(width, height)
 
         with offscreen.bind():
+            bgl.glClearColor(0.0, 0.0, 0.0, 1.0)
             bgl.glClear(bgl.GL_COLOR_BUFFER_BIT)
 
             shader.bind()
@@ -432,8 +437,8 @@ class Renderer:
         if self.is_stereo:
             self.scene.render.image_settings.views_format = self.view_format
             self.scene.render.image_settings.stereo_3d_format.display_mode = self.stereo_mode
-        # for filename in self.createdFiles:
-        #     os.remove(filename)
+        for filename in self.createdFiles:
+            os.remove(filename)
         self.createdFiles.clear()
     
     

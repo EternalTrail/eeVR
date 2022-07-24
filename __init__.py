@@ -178,7 +178,7 @@ class ToolPanel(Panel):
             else:
                 col.prop(props, 'equi360HFOV')
             col.prop(props, 'equiVFOV')
-        col.prop(props, 'stitchMargin')
+        # col.prop(props, 'stitchMargin')
         layout.separator()
         col = layout.column()
         col.operator(RenderImage.bl_idname, text="Render Image")
