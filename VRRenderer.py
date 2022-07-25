@@ -41,11 +41,6 @@ vec2 to_uv(float x, float y)
     return tr(vec2(x, y), 1.0, 0.5);
 }
 
-vec2 apply_margin(vec2 src)
-{
-    return src * MARGINSCALE + vec2(MARGIN, MARGIN);
-}
-
 vec2 to_uv_right(vec3 pt)
 {
     return to_uv(-pt.z/pt.x, pt.y/pt.x) * vec2(INVSIDEFRAC, 1);
@@ -66,6 +61,11 @@ vec2 to_uv_bottom(vec3 pt)
     return tr(to_uv(-pt.x/pt.y, -pt.z/pt.y), vec2(0, TBFRAC - 1), vec2(1, INVTBFRAC));
 }
 
+vec2 apply_margin(vec2 src)
+{
+    return src * MARGINSCALE + vec2(MARGIN, MARGIN);
+}
+
 vec2 to_uv_front(vec3 pt)
 {
     return apply_margin(to_uv(pt.x/pt.z, pt.y/pt.z));
@@ -74,6 +74,11 @@ vec2 to_uv_front(vec3 pt)
 vec2 to_uv_back(vec3 pt)
 {
     return apply_margin(to_uv(pt.x/pt.z, -pt.y/pt.z));
+}
+
+vec4 alphablend(vec4 a, vec4 b, float alpha)
+{
+    return (1.0 - alpha) * a + alpha * b;
 }
 
 // Input cubemap textures
@@ -89,7 +94,6 @@ in vec2 vTexCoord;
 out vec4 fragColor;
 
 void main() {
-
 '''
 
 dome = '''
@@ -103,7 +107,6 @@ dome = '''
     vec3 pt;
     %s
     pt.z = cos(phi);
-
 '''
 
 domemodes = [
@@ -154,31 +157,50 @@ fetch_top_bottom = '''
     fragColor += tob * (1.0 - up) * texture(cubeBottomImage, to_uv_bottom(pt));
 '''
 
-fetch_front_back = '''
-    fragColor += fob * front * texture(cubeFrontImage, to_uv_front(pt));
-    fragColor += fob * (1.0 - front) * texture(cubeBackImage, to_uv_back(pt));
-}
+fetch_front = '''
+    {
+        vec2 uv = to_uv_front(pt);
+        fragColor += fob * front * texture(cubeFrontImage, uv);
+%s
+    }
 '''
 
-fetch_front_only = '''
-    vec2 uv = to_uv_front(pt);
-    fragColor += fob * front * texture(cubeFrontImage, uv);
+fetch_back = '''
+    {
+        vec2 uv = to_uv_back(pt);
+        fragColor += fob * (1.0 - front) * texture(cubeBackImage, uv);
+%s
+    }
+'''
 
-    // Seam Blending
+blend_seam_front = '''
+        // Seam Blending
+        float alpha = front * lor * right * smoothstep(1.0, 0.0, clamp((uv.x - MARGINSCALE - MARGIN) / MARGIN, 0.0, 1.0));
+        fragColor = alphablend(fragColor, texture(cubeFrontImage, uv), alpha);
+        
+        alpha = front * lor * (1.0 - right) * smoothstep(0.0, 1.0, clamp(uv.x / MARGIN, 0.0, 1.0));
+        fragColor = alphablend(fragColor, texture(cubeFrontImage, uv), alpha);
 
-    float blend = step(0.0001, MARGIN);
-    float alpha = blend * lor * right * smoothstep(1.0, 0.0, clamp((uv.x - MARGINSCALE - MARGIN) / MARGIN, 0.0, 1.0));
-    fragColor = (1.0 - alpha) * fragColor + alpha * texture(cubeFrontImage, uv);
-    
-    alpha = blend * lor * (1.0 - right) * smoothstep(0.0, 1.0, clamp(uv.x / MARGIN, 0.0, 1.0));
-    fragColor = (1.0 - alpha) * fragColor + alpha * texture(cubeFrontImage, uv);
+        alpha = front * tob * up * smoothstep(1.0, 0.0, clamp((uv.y - MARGINSCALE - MARGIN) / MARGIN, 0.0, 1.0));
+        fragColor = alphablend(fragColor, texture(cubeFrontImage, uv), alpha);
 
-    alpha = blend * tob * up * smoothstep(1.0, 0.0, clamp((uv.y - MARGINSCALE - MARGIN) / MARGIN, 0.0, 1.0));
-    fragColor = (1.0 - alpha) * fragColor + alpha * texture(cubeFrontImage, uv);
+        alpha = front * tob * (1.0 - up) * smoothstep(0.0, 1.0, clamp(uv.y / MARGIN, 0.0, 1.0));
+        fragColor = alphablend(fragColor, texture(cubeFrontImage, uv), alpha);
+'''
 
-    alpha = blend * tob * (1.0 - up) * smoothstep(0.0, 1.0, clamp(uv.y / MARGIN, 0.0, 1.0));
-    fragColor = (1.0 - alpha) * fragColor + alpha * texture(cubeFrontImage, uv);
-}
+blend_seam_back = '''
+        // Seam Blending
+        float alpha = (1.0 - front) * lor * right * smoothstep(1.0, 0.0, clamp((uv.x - MARGINSCALE - MARGIN) / MARGIN, 0.0, 1.0));
+        fragColor = alphablend(fragColor, texture(cubeBackImage, uv), alpha);
+        
+        alpha = (1.0 - front) * lor * (1.0 - right) * smoothstep(0.0, 1.0, clamp(uv.x / MARGIN, 0.0, 1.0));
+        fragColor = alphablend(fragColor, texture(cubeBackImage, uv), alpha);
+
+        alpha = (1.0 - front) * tob * up * smoothstep(1.0, 0.0, clamp((uv.y - MARGINSCALE - MARGIN) / MARGIN, 0.0, 1.0));
+        fragColor = alphablend(fragColor, texture(cubeBackImage, uv), alpha);
+
+        alpha = (1.0 - front) * tob * (1.0 - up) * smoothstep(0.0, 1.0, clamp(uv.y / MARGIN, 0.0, 1.0));
+        fragColor = alphablend(fragColor, texture(cubeBackImage, uv), alpha);
 '''
 
 # Define the vertex shader
@@ -235,8 +257,8 @@ class Renderer:
         self.HFOV = (self.FOV if eeVR.renderModeEnum == 'DOME' else equiHFOV)
         self.VFOV = (self.FOV if eeVR.renderModeEnum =='DOME' else eeVR.equiVFOV)
         self.no_back_image = (self.HFOV <= 270)
-        self.no_side_images = (self.HFOV <= 90)
-        self.no_top_bottom_images = (self.VFOV <= 90)
+        self.no_side_images = True #(self.HFOV <= 90)
+        self.no_top_bottom_images = True #(self.VFOV <= 90)
         self.createdFiles = set()
         
         # Generate fragment shader code
@@ -251,15 +273,16 @@ class Renderer:
         hclip = self.HFOV / self.FOV
         vclip = self.VFOV / 180.0
         margin = 0.5 - 0.5 / tan(radians(45 + eeVR.stitchMargin))
-        # margin = (tan(radians(frontfov/2)) - tan(radians(frontfov/2)) / tan(radians(frontfov/2 + eeVR.stitchMargin))) / 2
-        print(fovfrac, sidefrac, tbfrac, hclip, vclip, margin, 1 - 2 * margin)
+        # print(fovfrac, sidefrac, tbfrac, hclip, vclip, margin, 1 - 2 * margin)
         self.frag_shader = \
            (commdef % (fovfrac, sidefrac, tbfrac, hclip, vclip, margin))\
          + (dome % domemodes[int(self.domeMethod)] if self.is_dome else equi)\
          + fetch_setup\
          + ('' if self.no_side_images else fetch_sides)\
          + ('' if self.no_top_bottom_images else fetch_top_bottom)\
-         + (fetch_front_only if self.no_back_image else fetch_front_back)
+         + ('' if self.no_back_image else (fetch_back % (blend_seam_back if False and margin > 0.0 else '')))\
+         + (fetch_front % (blend_seam_front if margin > 0.0 else ''))\
+         + '}'
         
         # Set the image name to the current time
         self.start_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
@@ -282,21 +305,21 @@ class Renderer:
         scale = (self.resolution_percentage_origin / 100.0)
         self.image_size = int(ceil(self.scene.render.resolution_x * scale)), int(ceil(self.scene.render.resolution_y * scale))
         self.base_resolution = self.image_size[0] * (90.0 / self.FOV)
+        margin_pixel = ((2 * eeVR.stitchMargin) / 90.0) * self.base_resolution
         self.camera_shift = {
             'top': [0.0, 0.5*(tbfrac-1), self.base_resolution, tbfrac*self.base_resolution],
             'bottom': [0.0, 0.5*(1-tbfrac), self.base_resolution, tbfrac*self.base_resolution],
             'left': [0.5*(1-sidefrac), 0.0, sidefrac*self.base_resolution, self.base_resolution],
             'right': [0.5*(sidefrac-1), 0.0, sidefrac*self.base_resolution, self.base_resolution],
-            'front': [0.0, 0.0, self.base_resolution, self.base_resolution],
-            'back': [0.0, 0.0, self.base_resolution, self.base_resolution]
+            'front': [0.0, 0.0, self.base_resolution + margin_pixel, self.base_resolution + margin_pixel],
+            'back': [0.0, 0.0, self.base_resolution + margin_pixel, self.base_resolution + margin_pixel]
         }
-        print(self.camera_shift)
         if self.is_stereo:
             self.view_format = self.scene.render.image_settings.views_format
             self.scene.render.image_settings.views_format = 'STEREO_3D'
             self.stereo_mode = self.scene.render.image_settings.stereo_3d_format.display_mode
             self.scene.render.image_settings.stereo_3d_format.display_mode = 'TOPBOTTOM'
-
+        
         self.direction_offsets = self.find_direction_offsets()
     
     
@@ -357,6 +380,9 @@ class Renderer:
                     bind_and_filter(bgl.GL_TEXTURE2, imageList[2].bindcode, "cubeTopImage", 2)
                     if not self.no_back_image:
                         bind_and_filter(bgl.GL_TEXTURE3, imageList[3].bindcode, "cubeBackImage", 3)
+                else:
+                    if not self.no_back_image:
+                        bind_and_filter(bgl.GL_TEXTURE1, imageList[1].bindcode, "cubeBackImage", 3) # for development purpose
             else:
                 bind_and_filter(bgl.GL_TEXTURE1, imageList[1].bindcode, "cubeLeftImage", 1)
                 bind_and_filter(bgl.GL_TEXTURE2, imageList[2].bindcode, "cubeRightImage", 2)
@@ -439,7 +465,7 @@ class Renderer:
         self.scene.render.resolution_x = int(ceil(self.camera_shift[direction][2]))
         self.scene.render.resolution_y = int(ceil(self.camera_shift[direction][3]))
         self.scene.render.resolution_percentage = 100
-        # print(f"res {self.scene.render.resolution_x}, {self.scene.render.resolution_y} {self.camera_shift[direction]}")
+        print(f"{direction} : {self.scene.render.resolution_x} x {self.scene.render.resolution_y}")
 
 
     def clean_up(self, context):

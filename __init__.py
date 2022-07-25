@@ -62,9 +62,14 @@ class RenderImage(Operator):
 
         renderer = Renderer(context, False)
         now = time.time()
-        renderer.render_and_save()
+        try:
+            renderer.render_and_save()
+        except Exception:
+            self.report({'ERROR'}, "eeVR: Exception Occurs")
+        finally:
+            renderer.clean_up(context)
+
         print(f"eeVR: {round(time.time() - now, 2)} seconds")
-        renderer.clean_up(context)
 
         return {'FINISHED'}
 
@@ -94,7 +99,12 @@ class RenderAnimation(Operator):
             if context.scene.frame_current <= self.frame_end:
                 print(f"eeVR: Rendering frame {context.scene.frame_current}")
                 now = time.time()
-                self.renderer.render_and_save()
+                try:
+                    self.renderer.render_and_save()
+                except Exception:
+                    self.report({'ERROR'}, "eeVR: Exception Occurs")
+                    self.clean(context)
+                    return {'FINISHED'}
                 print(f"eeVR: {round(time.time() - now, 2)} seconds")
                 self.timer = wm.event_timer_add(0.1, window=context.window)
             else:
