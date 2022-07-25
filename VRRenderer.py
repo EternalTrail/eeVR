@@ -15,11 +15,13 @@ commdef = '''
 #define TBFRAC   %f
 #define HCLIP    %f
 #define VCLIP    %f
-#define MARGIN   %f
+#define HMARGIN  %f
+#define VMARGIN  %f
 
 const float INVSIDEFRAC = 1 / SIDEFRAC;
 const float INVTBFRAC = 1 / TBFRAC;
-const float MARGINSCALE = 1 - 2 * MARGIN;
+const float HMARGINSCALE = 1 - 2 * HMARGIN;
+const float VMARGINSCALE = 1 - 2 * VMARGIN;
 
 vec2 tr(vec2 src, vec2 offset, vec2 scale)
 {
@@ -63,7 +65,7 @@ vec2 to_uv_bottom(vec3 pt)
 
 vec2 apply_margin(vec2 src)
 {
-    return src * MARGINSCALE + vec2(MARGIN, MARGIN);
+    return src * vec2(HMARGINSCALE, VMARGINSCALE) + vec2(HMARGIN, VMARGIN);
 }
 
 vec2 to_uv_front(vec3 pt)
@@ -175,31 +177,31 @@ fetch_back = '''
 
 blend_seam_front = '''
         // Seam Blending
-        float alpha = front * lor * right * smoothstep(1.0, 0.0, clamp((uv.x - MARGINSCALE - MARGIN) / MARGIN, 0.0, 1.0));
+        float alpha = front * lor * right * smoothstep(1.0, 0.0, clamp((uv.x - HMARGINSCALE - HMARGIN) / HMARGIN, 0.0, 1.0));
         fragColor = alphablend(fragColor, texture(cubeFrontImage, uv), alpha);
         
-        alpha = front * lor * (1.0 - right) * smoothstep(0.0, 1.0, clamp(uv.x / MARGIN, 0.0, 1.0));
+        alpha = front * lor * (1.0 - right) * smoothstep(0.0, 1.0, clamp(uv.x / HMARGIN, 0.0, 1.0));
         fragColor = alphablend(fragColor, texture(cubeFrontImage, uv), alpha);
 
-        alpha = front * tob * up * smoothstep(1.0, 0.0, clamp((uv.y - MARGINSCALE - MARGIN) / MARGIN, 0.0, 1.0));
+        alpha = front * tob * up * smoothstep(1.0, 0.0, clamp((uv.y - VMARGINSCALE - VMARGIN) / VMARGIN, 0.0, 1.0));
         fragColor = alphablend(fragColor, texture(cubeFrontImage, uv), alpha);
 
-        alpha = front * tob * (1.0 - up) * smoothstep(0.0, 1.0, clamp(uv.y / MARGIN, 0.0, 1.0));
+        alpha = front * tob * (1.0 - up) * smoothstep(0.0, 1.0, clamp(uv.y / VMARGIN, 0.0, 1.0));
         fragColor = alphablend(fragColor, texture(cubeFrontImage, uv), alpha);
 '''
 
 blend_seam_back = '''
         // Seam Blending
-        float alpha = (1.0 - front) * lor * right * smoothstep(1.0, 0.0, clamp((1.0 - uv.x - MARGINSCALE - MARGIN) / MARGIN, 0.0, 1.0));
+        float alpha = (1.0 - front) * lor * right * smoothstep(1.0, 0.0, clamp((1.0 - uv.x - HMARGINSCALE - HMARGIN) / HMARGIN, 0.0, 1.0));
         fragColor = alphablend(fragColor, texture(cubeBackImage, uv), alpha);
         
-        alpha = (1.0 - front) * lor * (1.0 - right) * smoothstep(0.0, 1.0, clamp((1.0 - uv.x) / MARGIN, 0.0, 1.0));
+        alpha = (1.0 - front) * lor * (1.0 - right) * smoothstep(0.0, 1.0, clamp((1.0 - uv.x) / HMARGIN, 0.0, 1.0));
         fragColor = alphablend(fragColor, texture(cubeBackImage, uv), alpha);
 
-        alpha = (1.0 - front) * tob * up * smoothstep(1.0, 0.0, clamp((uv.y - MARGINSCALE - MARGIN) / MARGIN, 0.0, 1.0));
+        alpha = (1.0 - front) * tob * up * smoothstep(1.0, 0.0, clamp((uv.y - VMARGINSCALE - VMARGIN) / VMARGIN, 0.0, 1.0));
         fragColor = alphablend(fragColor, texture(cubeBackImage, uv), alpha);
 
-        alpha = (1.0 - front) * tob * (1.0 - up) * smoothstep(0.0, 1.0, clamp(uv.y / MARGIN, 0.0, 1.0));
+        alpha = (1.0 - front) * tob * (1.0 - up) * smoothstep(0.0, 1.0, clamp(uv.y / VMARGIN, 0.0, 1.0));
         fragColor = alphablend(fragColor, texture(cubeBackImage, uv), alpha);
 '''
 
@@ -273,9 +275,11 @@ class Renderer:
         hclip = self.HFOV / self.FOV
         vclip = self.VFOV / 180.0
         margin = 0.5 - 0.5 / tan(radians(45 + eeVR.stitchMargin))
+        hmargin = 0.0 if self.no_side_images else margin
+        vmargin = 0.0 if self.no_top_bottom_images else margin
         # print(fovfrac, sidefrac, tbfrac, hclip, vclip, margin, 1 - 2 * margin)
         self.frag_shader = \
-           (commdef % (fovfrac, sidefrac, tbfrac, hclip, vclip, margin))\
+           (commdef % (fovfrac, sidefrac, tbfrac, hclip, vclip, hmargin, vmargin))\
          + (dome % domemodes[int(self.domeMethod)] if self.is_dome else equi)\
          + fetch_setup\
          + ('' if self.no_side_images else fetch_sides)\
@@ -304,16 +308,16 @@ class Renderer:
         self.resolution_percentage_origin = self.scene.render.resolution_percentage
         scale = (self.resolution_percentage_origin / 100.0)
         self.image_size = int(ceil(self.scene.render.resolution_x * scale)), int(ceil(self.scene.render.resolution_y * scale))
-        self.base_resolution = self.image_size[0] * (90.0 / self.FOV)
-        margin_pixel = ((2 * eeVR.stitchMargin) / 90.0) * self.base_resolution
+        self.base_resolution = (self.image_size[0] * (90.0 / self.FOV), self.image_size[1] * (90.0 / self.FOV))
+        margin_pixel = (((2 * eeVR.stitchMargin) / 90.0) * self.base_resolution[0], ((2 * eeVR.stitchMargin) / 90.0) * self.base_resolution[1])
         margin_angle = radians(2 * self.scene.eeVR.stitchMargin)
-        self.camera_shift = {
-            'top': [0.0, 0.5*(tbfrac-1), self.base_resolution, tbfrac*self.base_resolution, pi/2],
-            'bottom': [0.0, 0.5*(1-tbfrac), self.base_resolution, tbfrac*self.base_resolution, pi/2],
-            'left': [0.5*(1-sidefrac), 0.0, sidefrac*self.base_resolution, self.base_resolution, pi/2],
-            'right': [0.5*(sidefrac-1), 0.0, sidefrac*self.base_resolution, self.base_resolution, pi/2],
-            'front': [0.0, 0.0, self.base_resolution + margin_pixel, self.base_resolution + margin_pixel, pi/2 + margin_angle],
-            'back': [0.0, 0.0, self.base_resolution + margin_pixel, self.base_resolution + margin_pixel, pi/2 + margin_angle]
+        self.camera_settings = {
+            'top': [0.0, 0.5*(tbfrac-1), self.base_resolution[0], tbfrac*self.base_resolution[1], pi/2],
+            'bottom': [0.0, 0.5*(1-tbfrac), self.base_resolution[0], tbfrac*self.base_resolution[1], pi/2],
+            'left': [0.5*(1-sidefrac), 0.0, sidefrac*self.base_resolution[1], self.base_resolution[0], pi/2],
+            'right': [0.5*(sidefrac-1), 0.0, sidefrac*self.base_resolution[1], self.base_resolution[0], pi/2],
+            'front': [0.0, 0.0, self.base_resolution[0] + margin_pixel[0], self.base_resolution[1] + margin_pixel[1], pi/2 + margin_angle],
+            'back': [0.0, 0.0, self.base_resolution[0] + margin_pixel[0], self.base_resolution[1] + margin_pixel[1], pi/2 + margin_angle]
         }
         if self.is_stereo:
             self.view_format = self.scene.render.image_settings.views_format
@@ -460,12 +464,12 @@ class Renderer:
         
         # Set the camera to the required postion    
         self.camera.rotation_euler = self.direction_offsets[direction]
-        self.camera.data.shift_x = self.camera_shift[direction][0]
-        self.camera.data.shift_y = self.camera_shift[direction][1]
-        self.scene.render.resolution_x = int(ceil(self.camera_shift[direction][2]))
-        self.scene.render.resolution_y = int(ceil(self.camera_shift[direction][3]))
+        self.camera.data.shift_x = self.camera_settings[direction][0]
+        self.camera.data.shift_y = self.camera_settings[direction][1]
+        self.scene.render.resolution_x = int(ceil(self.camera_settings[direction][2]))
+        self.scene.render.resolution_y = int(ceil(self.camera_settings[direction][3]))
         self.scene.render.resolution_percentage = 100
-        self.camera.data.angle_x = self.camera_shift[direction][4]
+        self.camera.data.angle_x = self.camera_settings[direction][4]
         print(f"{direction} : {self.scene.render.resolution_x} x {self.scene.render.resolution_y}")
 
 
