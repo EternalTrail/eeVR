@@ -190,10 +190,10 @@ blend_seam_front = '''
 
 blend_seam_back = '''
         // Seam Blending
-        float alpha = (1.0 - front) * lor * right * smoothstep(1.0, 0.0, clamp((uv.x - MARGINSCALE - MARGIN) / MARGIN, 0.0, 1.0));
+        float alpha = (1.0 - front) * lor * right * smoothstep(1.0, 0.0, clamp((1.0 - uv.x - MARGINSCALE - MARGIN) / MARGIN, 0.0, 1.0));
         fragColor = alphablend(fragColor, texture(cubeBackImage, uv), alpha);
         
-        alpha = (1.0 - front) * lor * (1.0 - right) * smoothstep(0.0, 1.0, clamp(uv.x / MARGIN, 0.0, 1.0));
+        alpha = (1.0 - front) * lor * (1.0 - right) * smoothstep(0.0, 1.0, clamp((1.0 - uv.x) / MARGIN, 0.0, 1.0));
         fragColor = alphablend(fragColor, texture(cubeBackImage, uv), alpha);
 
         alpha = (1.0 - front) * tob * up * smoothstep(1.0, 0.0, clamp((uv.y - MARGINSCALE - MARGIN) / MARGIN, 0.0, 1.0));
@@ -257,8 +257,8 @@ class Renderer:
         self.HFOV = (self.FOV if eeVR.renderModeEnum == 'DOME' else equiHFOV)
         self.VFOV = (self.FOV if eeVR.renderModeEnum =='DOME' else eeVR.equiVFOV)
         self.no_back_image = (self.HFOV <= 270)
-        self.no_side_images = True #(self.HFOV <= 90)
-        self.no_top_bottom_images = True #(self.VFOV <= 90)
+        self.no_side_images = (self.HFOV <= 90)
+        self.no_top_bottom_images = (self.VFOV <= 90)
         self.createdFiles = set()
         
         # Generate fragment shader code
@@ -280,7 +280,7 @@ class Renderer:
          + fetch_setup\
          + ('' if self.no_side_images else fetch_sides)\
          + ('' if self.no_top_bottom_images else fetch_top_bottom)\
-         + ('' if self.no_back_image else (fetch_back % (blend_seam_back if False and margin > 0.0 else '')))\
+         + ('' if self.no_back_image else (fetch_back % (blend_seam_back if margin > 0.0 else '')))\
          + (fetch_front % (blend_seam_front if margin > 0.0 else ''))\
          + '}'
         
@@ -306,13 +306,14 @@ class Renderer:
         self.image_size = int(ceil(self.scene.render.resolution_x * scale)), int(ceil(self.scene.render.resolution_y * scale))
         self.base_resolution = self.image_size[0] * (90.0 / self.FOV)
         margin_pixel = ((2 * eeVR.stitchMargin) / 90.0) * self.base_resolution
+        margin_angle = radians(2 * self.scene.eeVR.stitchMargin)
         self.camera_shift = {
-            'top': [0.0, 0.5*(tbfrac-1), self.base_resolution, tbfrac*self.base_resolution],
-            'bottom': [0.0, 0.5*(1-tbfrac), self.base_resolution, tbfrac*self.base_resolution],
-            'left': [0.5*(1-sidefrac), 0.0, sidefrac*self.base_resolution, self.base_resolution],
-            'right': [0.5*(sidefrac-1), 0.0, sidefrac*self.base_resolution, self.base_resolution],
-            'front': [0.0, 0.0, self.base_resolution + margin_pixel, self.base_resolution + margin_pixel],
-            'back': [0.0, 0.0, self.base_resolution + margin_pixel, self.base_resolution + margin_pixel]
+            'top': [0.0, 0.5*(tbfrac-1), self.base_resolution, tbfrac*self.base_resolution, pi/2],
+            'bottom': [0.0, 0.5*(1-tbfrac), self.base_resolution, tbfrac*self.base_resolution, pi/2],
+            'left': [0.5*(1-sidefrac), 0.0, sidefrac*self.base_resolution, self.base_resolution, pi/2],
+            'right': [0.5*(sidefrac-1), 0.0, sidefrac*self.base_resolution, self.base_resolution, pi/2],
+            'front': [0.0, 0.0, self.base_resolution + margin_pixel, self.base_resolution + margin_pixel, pi/2 + margin_angle],
+            'back': [0.0, 0.0, self.base_resolution + margin_pixel, self.base_resolution + margin_pixel, pi/2 + margin_angle]
         }
         if self.is_stereo:
             self.view_format = self.scene.render.image_settings.views_format
@@ -382,7 +383,7 @@ class Renderer:
                         bind_and_filter(bgl.GL_TEXTURE3, imageList[3].bindcode, "cubeBackImage", 3)
                 else:
                     if not self.no_back_image:
-                        bind_and_filter(bgl.GL_TEXTURE1, imageList[1].bindcode, "cubeBackImage", 3) # for development purpose
+                        bind_and_filter(bgl.GL_TEXTURE1, imageList[1].bindcode, "cubeBackImage", 1) # for development purpose
             else:
                 bind_and_filter(bgl.GL_TEXTURE1, imageList[1].bindcode, "cubeLeftImage", 1)
                 bind_and_filter(bgl.GL_TEXTURE2, imageList[2].bindcode, "cubeRightImage", 2)
@@ -459,12 +460,12 @@ class Renderer:
         
         # Set the camera to the required postion    
         self.camera.rotation_euler = self.direction_offsets[direction]
-        self.camera.data.angle_x = radians(90) if direction != 'front' else radians(90 + 2 * self.scene.eeVR.stitchMargin)
         self.camera.data.shift_x = self.camera_shift[direction][0]
         self.camera.data.shift_y = self.camera_shift[direction][1]
         self.scene.render.resolution_x = int(ceil(self.camera_shift[direction][2]))
         self.scene.render.resolution_y = int(ceil(self.camera_shift[direction][3]))
         self.scene.render.resolution_percentage = 100
+        self.camera.data.angle_x = self.camera_shift[direction][4]
         print(f"{direction} : {self.scene.render.resolution_x} x {self.scene.render.resolution_y}")
 
 
