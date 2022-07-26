@@ -38,16 +38,9 @@ def has_invalid_condition(self : 'Operator', context : 'Context'):
         self.report({'ERROR'}, "eeVR ERROR : Scene camera is not set.")
         return True
     if context.scene.render.use_multiview:
-        if context.scene.eeVR.renderModeEnum == 'DOME':
-            if context.scene.eeVR.domeFOV <= 180:
-                return False
-        else:
-            if context.scene.eeVR.equiModeEnum == "180":
-                return False
-            elif context.scene.eeVR.equi360HFOV <= 180.0:
-                return False
-        self.report({'ERROR'}, "eeVR ERROR : cannot support stereo over 180° fov.")
-        return True
+        if (context.scene.eeVR.HFOV180 if context.scene.eeVR.fovModeEnum == "180" else context.scene.eeVR.HFOV) > radians(180):
+            self.report({'ERROR'}, "eeVR ERROR : cannot support stereo over 180° fov.")
+            return True
     return False
 
 
