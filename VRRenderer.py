@@ -4,7 +4,7 @@ import time
 import gpu
 import bgl
 import numpy as np
-from math import sin, cos, tan, pi, ceil
+from math import sin, cos, tan, ceil, pi
 from datetime import datetime
 from gpu_extras.batch import batch_for_shader
 
@@ -105,17 +105,17 @@ dome = '''
     
     // Calculate the position on unit sphere
     vec2 dunit = normalize(d);
-    float phi = FOVFRAC * PI * r;
+    float azimuth = FOVFRAC * PI * r;
     vec3 pt;
     %s
-    pt.z = cos(phi);
+    pt.z = cos(azimuth);
 '''
 
 domemodes = [
-    'pt.xy = dunit * phi;',
-    'pt.xy = dunit * sin(phi);',
-    'pt.xy = 2.0 * dunit * sin(phi / 2.0);',
-    'pt.xy = 2.0 * dunit * tan(phi / 2.0);'
+    'pt.xy = dunit * azimuth;',
+    'pt.xy = dunit * sin(azimuth);',
+    'pt.xy = 2.0 * dunit * sin(azimuth / 2.0);',
+    'pt.xy = 2.0 * dunit * tan(azimuth / 2.0);'
 ]
 
 equi = '''
@@ -237,6 +237,15 @@ void main() {
 }
 '''
 
+def snap_angle(src):
+    if abs(src - pi/2) < 0.000001:
+        return pi/2
+    elif abs(src - pi) < 0.000001:
+        return pi
+    elif abs(src - 2*pi) < 0.000001:
+        return 2*pi
+    return src
+
 class Renderer:
     
     def __init__(self, context, is_animation = False, folder = ''):
@@ -270,13 +279,9 @@ class Renderer:
         self.is_animation = is_animation
         self.is_dome = (eeVR.renderModeEnum == 'DOME')
         self.domeMethod = bpy.context.scene.eeVR.domeMethodEnum
-        if self.is_dome:
-            self.FOV = min(max(eeVR.domeFOV, pi), 2*pi)
-        else:
-            self.FOV = pi if eeVR.equiModeEnum == "180" else pi if eeVR.equiModeEnum == "360" else eeVR.equi360HFOV
-        equiHFOV = eeVR.equi180HFOV if eeVR.equiModeEnum == "180" else eeVR.equi360HFOV
-        self.HFOV = (self.FOV if eeVR.renderModeEnum == 'DOME' else equiHFOV)
-        self.VFOV = (self.FOV if eeVR.renderModeEnum =='DOME' else eeVR.equiVFOV)
+        self.HFOV = snap_angle(eeVR.HFOV180 if eeVR.fovModeEnum == '180' else eeVR.HFOV)
+        self.VFOV = snap_angle(eeVR.VFOV)
+        self.FOV = pi if eeVR.fovModeEnum == '180' else 2 * pi if eeVR.fovModeEnum == '360' else max(self.HFOV, self.VFOV)
         self.no_back_image = (self.HFOV <= 3*pi/2)
         self.no_side_images = (self.HFOV <= pi/2)
         self.no_top_bottom_images = (self.VFOV <= pi/2)
@@ -292,9 +297,9 @@ class Renderer:
             sidefrac = sin(self.HFOV - pi/2) * 0.5
         tbfrac = max(sidefrac, sin(self.VFOV - pi/2) * 0.5)
         margin = max(0.0, 0.5 - 0.5 / tan(pi/4 + eeVR.stitchMargin))
+        hmargin = vmargin = margin
         # hmargin = 0.0 if self.no_side_images else margin
         # vmargin = 0.0 if self.no_top_bottom_images else margin
-        hmargin = vmargin = margin
         self.frag_shader = \
            (commdef % (fovfrac, sidefrac, tbfrac, self.HFOV, self.VFOV, hmargin, vmargin))\
          + (dome % domemodes[int(self.domeMethod)] if self.is_dome else equi)\
@@ -341,7 +346,7 @@ class Renderer:
             (2 * self.scene.eeVR.stitchMargin) if hmargin > 0.0 else 0.0,
             (2 * self.scene.eeVR.stitchMargin) if vmargin > 0.0 else 0.0
         )
-        print(margin, hmargin, vmargin, margin_angle)
+        # print(margin, hmargin, vmargin, margin_angle)
         self.camera_settings = {
             'top': (0.0, 0.5*(tbfrac-1), pi/2, tb_resolution[0], tb_resolution[1], 100.0, aspect_ratio),
             'bottom': (0.0, 0.5*(1-tbfrac), pi/2, tb_resolution[0], tb_resolution[1], 100.0, aspect_ratio),

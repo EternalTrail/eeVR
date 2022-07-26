@@ -180,14 +180,12 @@ class ToolPanel(Panel):
         col.prop(props, 'renderModeEnum')
         if props.renderModeEnum == 'DOME':
             col.prop(props, 'domeMethodEnum')
-            col.prop(props, 'domeFOV')
+        col.prop(props, 'fovModeEnum')
+        if props.fovModeEnum == '180':
+            col.prop(props, 'HFOV180')
         else:
-            col.prop(props, 'equiModeEnum')
-            if props.equiModeEnum == '180':
-                col.prop(props, 'equi180HFOV')
-            else:
-                col.prop(props, 'equi360HFOV')
-            col.prop(props, 'equiVFOV')
+            col.prop(props, 'HFOV')
+        col.prop(props, 'VFOV')
         col.prop(props, 'stitchMargin')
         layout.separator()
         col = layout.column()
@@ -221,61 +219,48 @@ class Properties(bpy.types.PropertyGroup):
         name="Method",
     )
 
-    domeFOV: bpy.props.FloatProperty(
-        radians(180.0),
-        default=radians(180.0),
-        name="FOV",
-        subtype='ANGLE',
-        min=radians(180),
-        max=radians(360),
-        description="Field of view in degrees",
-    )
-
-    equiModeEnum: bpy.props.EnumProperty(
+    fovModeEnum: bpy.props.EnumProperty(
         items=[
             ("180", "180°", "VR 180"),
-            ("360", "360°", "VR 360 (not support stereo)"),
-            ("180OVER", "180° ~ 360°", "over 180° not support stereo"),
+            ("360", "360°", "VR 360 (over 180° not support stereo)"),
+            ("ANY", "Custom Fov", "over 180° not support stereo"),
         ],
         default="180",
-        name="Mode",
+        name="VR Format",
     )
 
-    equi180HFOV: bpy.props.FloatProperty(
-        radians(180.0),
-        default=radians(180.0),
+    HFOV: bpy.props.FloatProperty(
         name="Horizontal FOV",
         subtype='ANGLE',
-        min=radians(90),
+        default=radians(360),
+        min=radians(1),
+        max=radians(360),
+        description="Horizontal Field of view in degrees",
+    )
+
+    HFOV180: bpy.props.FloatProperty(
+        name="Horizontal FOV",
+        subtype='ANGLE',
+        unit='ROTATION',
+        default=radians(180),
+        min=radians(1),
         max=radians(180),
         description="Horizontal Field of view in degrees",
     )
 
-    equi360HFOV: bpy.props.FloatProperty(
-        radians(360.0),
-        default=radians(360.0),
-        name="Horizontal FOV",
-        subtype='ANGLE',
-        min=radians(180),
-        max=radians(360),
-        description="Horizontal Field of view in degrees",
-    )
-
-    equiVFOV: bpy.props.FloatProperty(
-        radians(180.0),
-        default=radians(180.0),
+    VFOV: bpy.props.FloatProperty(
         name="Vertical FOV",
         subtype='ANGLE',
-        min=radians(90),
+        default=radians(180),
+        min=radians(1),
         max=radians(180),
         description="Vertical Field of view in degrees",
     )
 
     stitchMargin: bpy.props.FloatProperty(
-        radians(5.0),
-        default=radians(5.0),
         name="Stitch Margin",
         subtype='ANGLE',
+        default=radians(5),
         min=radians(0),
         max=radians(45),
         description="Margin for Seam Blending in degrees",
