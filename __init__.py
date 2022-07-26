@@ -5,6 +5,7 @@
 import os
 import time
 from datetime import datetime
+from math import radians
 
 if "bpy" in locals():
     import importlib
@@ -43,6 +44,8 @@ def has_invalid_condition(self : 'Operator', context : 'Context'):
         else:
             if context.scene.eeVR.equiModeEnum == "180":
                 return False
+            elif context.scene.eeVR.equi360HFOV <= 180.0:
+                return False
         self.report({'ERROR'}, "eeVR ERROR : cannot support stereo over 180° fov.")
         return True
     return False
@@ -64,8 +67,6 @@ class RenderImage(Operator):
         now = time.time()
         try:
             renderer.render_and_save()
-        except Exception:
-            self.report({'ERROR'}, "eeVR: Exception Occurs")
         finally:
             renderer.clean_up(context)
 
@@ -101,10 +102,9 @@ class RenderAnimation(Operator):
                 now = time.time()
                 try:
                     self.renderer.render_and_save()
-                except Exception:
-                    self.report({'ERROR'}, "eeVR: Exception Occurs")
+                except Exception as e:
                     self.clean(context)
-                    return {'FINISHED'}
+                    raise e
                 print(f"eeVR: {round(time.time() - now, 2)} seconds")
                 self.timer = wm.event_timer_add(0.1, window=context.window)
             else:
@@ -222,56 +222,62 @@ class Properties(bpy.types.PropertyGroup):
     )
 
     domeFOV: bpy.props.FloatProperty(
-        180.0,
-        default=180.0,
+        radians(180.0),
+        default=radians(180.0),
         name="FOV",
-        min=180,
-        max=360,
+        subtype='ANGLE',
+        min=radians(180),
+        max=radians(360),
         description="Field of view in degrees",
     )
 
     equiModeEnum: bpy.props.EnumProperty(
         items=[
             ("180", "180°", "VR 180"),
-            ("360", "360° (>= 180°)", "VR 360 (not support stereo)"),
+            ("360", "360°", "VR 360 (not support stereo)"),
+            ("180OVER", "180° ~ 360°", "over 180° not support stereo"),
         ],
         default="180",
         name="Mode",
     )
 
     equi180HFOV: bpy.props.FloatProperty(
-        180.0,
-        default=180.0,
+        radians(180.0),
+        default=radians(180.0),
         name="Horizontal FOV",
-        min=90,
-        max=180,
+        subtype='ANGLE',
+        min=radians(90),
+        max=radians(180),
         description="Horizontal Field of view in degrees",
     )
 
     equi360HFOV: bpy.props.FloatProperty(
-        360.0,
-        default=360.0,
+        radians(360.0),
+        default=radians(360.0),
         name="Horizontal FOV",
-        min=181,
-        max=360,
+        subtype='ANGLE',
+        min=radians(180),
+        max=radians(360),
         description="Horizontal Field of view in degrees",
     )
 
     equiVFOV: bpy.props.FloatProperty(
-        180.0,
-        default=180.0,
+        radians(180.0),
+        default=radians(180.0),
         name="Vertical FOV",
-        min=90,
-        max=180,
+        subtype='ANGLE',
+        min=radians(90),
+        max=radians(180),
         description="Vertical Field of view in degrees",
     )
 
     stitchMargin: bpy.props.FloatProperty(
-        5.0,
-        default=5.0,
+        radians(5.0),
+        default=radians(5.0),
         name="Stitch Margin",
-        min=0,
-        max=45,
+        subtype='ANGLE',
+        min=radians(0),
+        max=radians(45),
         description="Margin for Seam Blending in degrees",
     )
 
