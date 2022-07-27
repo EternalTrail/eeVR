@@ -115,6 +115,7 @@ dome = '''
     %s
     pt.z = cos(phi);
     float azimuth = atan2(pt.x, pt.z);
+    float elevation = atan2(pt.y, length(pt.xz));
 '''
 
 domemodes = [
@@ -147,25 +148,54 @@ fetch_setup = '''
     float right = step(0, pt.x);
     float up = step(0, pt.y);
     float front = step(0, pt.z);
+'''
 
-    // clip
+box_hclip = '''
     {
         float over45 = step(0.25 * PI, abs(azimuth));
         float over135 = step(0.75 * PI, abs(azimuth));
         float angle = 0.0;
-        angle = (fob + tob) * (1 - over45) * front * abs(pt.x/pt.z) * 0.5 * PI;
-        angle += (lor + tob) * over45 * (1 - over135) * right * (2 - pt.z/pt.x) * 0.5 * PI;
-        angle += (lor + tob) * over45 * (1 - over135) * (1 - right) * (pt.z/pt.x + 2) * 0.5 * PI;
-        angle += (fob + tob) * over135 * (1 - front) * (4 - abs(pt.x/pt.z)) * 0.5 * PI;
-        if(angle > HCLIP) discard;
-
-        angle = fob * ((1 - over45) + over135) * abs(pt.y/pt.z) * 0.5 * PI;
-        angle += lor * over45 * (1 - over135) * abs(pt.y/pt.x) * 0.5 * PI;
-        angle += tob * ((1 - over45) + over135) * (2 - abs(pt.z/pt.y)) * 0.5 * PI;
-        angle += tob * over45 * (1 - over135) * (2 - abs(pt.x/pt.y)) * 0.5 * PI;
-        if(angle > VCLIP) discard;
+        angle = (fob + tob) * (1 - over45) * front * abs(pt.x/pt.z) * 0.25 * PI;
+        angle += (lor + tob) * over45 * (1 - over135) * right * (2 - pt.z/pt.x) * 0.25 * PI;
+        angle += (lor + tob) * over45 * (1 - over135) * (1 - right) * (pt.z/pt.x + 2) * 0.25 * PI;
+        angle += (fob + tob) * over135 * (1 - front) * (4 - abs(pt.x/pt.z)) * 0.25 * PI;
+        if(angle > HCLIP*0.5) discard;
     }
 '''
+
+box_vclip = '''
+    {
+        float over45 = step(0.25 * PI, abs(azimuth));
+        float over135 = step(0.75 * PI, abs(azimuth));
+        float angle = 0.0;
+        angle = fob * ((1 - over45) + over135) * abs(pt.y/pt.z) * 0.25 * PI;
+        angle += lor * over45 * (1 - over135) * abs(pt.y/pt.x) * 0.25 * PI;
+        angle += tob * ((1 - over45) + over135) * (2 - abs(pt.z/pt.y)) * 0.25 * PI;
+        angle += tob * over45 * (1 - over135) * (2 - abs(pt.x/pt.y)) * 0.25 * PI;
+        if(angle > VCLIP*0.5) discard;
+    }
+'''
+
+sph_hclip = '''
+    if(abs(azimuth) > HCLIP*0.5) discard;
+'''
+
+sph_vclip = '''
+    if(abs(elevation) > VCLIP*0.5) discard;
+'''
+
+clip_h = {
+    'None': '',
+    'Boxical': box_hclip,
+    'Spherical': sph_hclip,
+}
+
+clip_v = {
+    'None': '',
+    'Boxical Horizon': box_vclip,
+    'Boxical': box_vclip,
+    'Spherical': sph_vclip,
+}
 
 fetch_sides = '''
     fragColor += lor * right * texture(cubeRightImage, to_uv_right(pt));
@@ -316,7 +346,7 @@ class Renderer:
         self.frag_shader = \
            (commdef % (fovfrac, sidefrac, tbfrac, self.HFOV, self.VFOV, hmargin, vmargin))\
          + (dome % domemodes[int(self.domeMethod)] if self.is_dome else equi)\
-         + fetch_setup\
+         + fetch_setup + clip_h[eeVR.hclipMode] + clip_v[eeVR.vclipMode]\
          + ('' if self.no_side_images else fetch_sides)\
          + ('' if self.no_top_bottom_images else fetch_top_bottom)\
          + ('' if self.no_back_image else (fetch_back % ((blend_seam_back_h if hmargin > 0.0 else '') + (blend_seam_back_v if vmargin > 0.0 else ''))))\

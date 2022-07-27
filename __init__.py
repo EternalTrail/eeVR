@@ -176,6 +176,8 @@ class ToolPanel(Panel):
             col.prop(props, 'HFOV')
         col.prop(props, 'VFOV')
         col.prop(props, 'stitchMargin')
+        col.prop(props, 'hclipMode')
+        col.prop(props, 'vclipMode')
         hfov = props.HFOV180 if props.fovModeEnum == "180" else props.HFOV
         if context.scene.render.use_multiview and hfov > radians(180) + 0.000001:
             col.label(icon='ERROR', text="eeVR cannot support stereo over 180° fov correctly.")
@@ -266,6 +268,27 @@ class Properties(bpy.types.PropertyGroup):
         min=radians(0),
         max=radians(45),
         description="Margin for Seam Blending in degrees",
+    )
+
+    hclipMode: bpy.props.EnumProperty(
+        items=[
+            ("None", "None", "None"),
+            ("Boxical", "Boxical", "Boxical"),
+            ("Spherical", "Spherical", "Spherical"),
+        ],
+        default="None",
+        name="Horizontal Clip Mode",
+    )
+
+    vclipMode: bpy.props.EnumProperty(
+        items=[
+            ("None", "None", "None"),
+            ("Boxical Horizon", "Boxical Horizon", "Boxical Horizon"),
+            ("Boxical", "Boxical", "Boxical"),
+            ("Spherical", "Spherical", "Spherical"),
+        ],
+        default="None",
+        name="Vertical Clip Mode",
     )
 
     cancel: bpy.props.BoolProperty(
