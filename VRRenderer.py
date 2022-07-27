@@ -333,7 +333,7 @@ class Renderer:
         else:
             sidefrac = sin(self.HFOV - pi/2) * 0.5
         tbfrac = max(sidefrac, sin(self.VFOV - pi/2) * 0.5)
-        margin = max(0.0, 0.5 * tan(pi/4 + eeVR.stitchMargin) - 0.5)
+        margin = max(0.0, 1 / tan(pi/4 + eeVR.stitchMargin) - 1)
         hmargin = 0.0 if self.no_side_images else margin
         vmargin = 0.0 if self.no_top_bottom_images else margin
         smargin = 0.0 if self.no_side_images else margin
