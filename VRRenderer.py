@@ -4,7 +4,7 @@ import time
 import gpu
 import bgl
 import numpy as np
-from math import sin, cos, tan, ceil, pi
+from math import sin, cos, tan, ceil, degrees, pi
 from datetime import datetime
 from gpu_extras.batch import batch_for_shader
 
@@ -21,9 +21,9 @@ commdef = '''
 
 const float INVSIDEFRAC = 1 / SIDEFRAC;
 const float INVTBFRAC = 1 / TBFRAC;
-const float HMARGINSCALE = 1 - 2 * HMARGIN;
-const float VMARGINSCALE = 1 - 2 * VMARGIN;
-const float SMARGINSCALE = 1 - 2 * SMARGIN;
+const float HMARGINSCALE = 1 / (1 + 2 * HMARGIN);
+const float VMARGINSCALE = 1 / (1 + 2 * VMARGIN);
+const float SMARGINSCALE = 1 / (1 + 2 * SMARGIN);
 
 vec2 tr(vec2 src, vec2 offset, vec2 scale)
 {
@@ -47,7 +47,7 @@ vec2 to_uv(float x, float y)
 
 vec2 apply_side_margin(vec2 src)
 {
-    return src * vec2(SMARGINSCALE, 1) + vec2(SMARGIN, 0);
+    return tr(src, vec2(0, SMARGIN), vec2(1, SMARGINSCALE));
 }
 
 vec2 to_uv_right(vec3 pt)
@@ -57,7 +57,7 @@ vec2 to_uv_right(vec3 pt)
 
 vec2 to_uv_left(vec3 pt)
 {
-    return tr(apply_side_margin(to_uv(-pt.z/pt.x, -pt.y/pt.x)), vec2(SIDEFRAC - 1, 0), vec2(INVSIDEFRAC, 1));
+    return apply_side_margin(tr(to_uv(-pt.z/pt.x, -pt.y/pt.x), vec2(SIDEFRAC - 1, 0), vec2(INVSIDEFRAC, 1)));
 }
 
 vec2 to_uv_top(vec3 pt)
@@ -72,7 +72,7 @@ vec2 to_uv_bottom(vec3 pt)
 
 vec2 apply_margin(vec2 src)
 {
-    return src * vec2(HMARGINSCALE, VMARGINSCALE) + vec2(HMARGIN, VMARGIN);
+    return tr(src, vec2(HMARGIN, VMARGIN), vec2(HMARGINSCALE, VMARGINSCALE));
 }
 
 vec2 to_uv_front(vec3 pt)
@@ -149,12 +149,9 @@ fetch_setup = '''
     float right = step(0, pt.x);
     float up = step(0, pt.y);
     float front = step(0, pt.z);
-'''
-
-box_hclip = '''
+    float over45 = step(0.25 * PI, abs(azimuth));
+    float over135 = step(0.75 * PI, abs(azimuth));
     {
-        float over45 = step(0.25 * PI, abs(azimuth));
-        float over135 = step(0.75 * PI, abs(azimuth));
         float angle;
         angle = (fob + tob) * (1 - over45) * front * abs(pt.x/pt.z) * 0.25 * PI;
         angle += (lor + tob) * over45 * (1 - over135) * right * (2 - pt.z/pt.x) * 0.25 * PI;
@@ -162,9 +159,6 @@ box_hclip = '''
         angle += (fob + tob) * over135 * (1 - front) * (4 - abs(pt.x/pt.z)) * 0.25 * PI;
         if(angle > HCLIP*0.5) discard;
     }
-'''
-
-box_vclip = '''
     {
         float near_horizon = step(abs(pt.y), abs(pt.z));
         float angle;
@@ -175,8 +169,10 @@ box_vclip = '''
 '''
 
 fetch_sides = '''
-    fragColor += lor * right * texture(cubeRightImage, to_uv_right(pt));
-    fragColor += lor * (1 - right) * texture(cubeLeftImage, to_uv_left(pt));
+    vec2 right_uv = to_uv_right(pt);
+    fragColor += lor * right * texture(cubeRightImage, right_uv);
+    vec2 left_uv = to_uv_left(pt);
+    fragColor += lor * (1 - right) * texture(cubeLeftImage, left_uv);
 '''
 
 fetch_top_bottom = '''
@@ -235,9 +231,27 @@ blend_seam_back_v = '''
             float alpha = (1 - front) * tob * up * smoothstep(1.0, 0.0, clamp((uv.y - VMARGINSCALE - VMARGIN) / VMARGIN, 0.0, 1.0));
             fragColor = mix(fragColor, texture(cubeBackImage, uv), alpha);
 
-            alpha = (1 - front) * tob * (1.0 - up) * smoothstep(0.0, 1.0, clamp(uv.y / VMARGIN, 0.0, 1.0));
+            alpha = (1 - front) * tob * (1 - up) * smoothstep(0.0, 1.0, clamp(uv.y / VMARGIN, 0.0, 1.0));
             fragColor = mix(fragColor, texture(cubeBackImage, uv), alpha);
         }
+'''
+
+blend_seam_sides = '''
+    {
+        float range = over45 * (1 - over135);
+        
+        float alpha = range * right * tob * up * smoothstep(1.0, 0.0, clamp((right_uv.y - SMARGINSCALE - SMARGIN) / SMARGIN, 0.0, 1.0));
+        fragColor = mix(fragColor, texture(cubeRightImage, right_uv), alpha);
+
+        alpha = range * right * tob * (1 - up) * smoothstep(0.0, 1.0, clamp(right_uv.y / SMARGIN, 0.0, 1.0));
+        fragColor = mix(fragColor, texture(cubeRightImage, right_uv), alpha);
+
+        alpha = range * (1 - right) * tob * up * smoothstep(1.0, 0.0, clamp((left_uv.y - SMARGINSCALE - SMARGIN) / SMARGIN, 0.0, 1.0));
+        fragColor = mix(fragColor, texture(cubeLeftImage, left_uv), alpha);
+
+        alpha = range * (1 - right) * tob * (1 - up) * smoothstep(0.0, 1.0, clamp(left_uv.y / SMARGIN, 0.0, 1.0));
+        fragColor = mix(fragColor, texture(cubeLeftImage, left_uv), alpha);
+    }
 '''
 
 # Define the vertex shader
@@ -316,18 +330,19 @@ class Renderer:
         else:
             sidefrac = sin(self.HFOV - pi/2) * 0.5
         tbfrac = max(sidefrac, sin(self.VFOV - pi/2) * 0.5)
-        margin = max(0.0, 0.5 - 0.5 / tan(pi/4 + eeVR.stitchMargin))
-        hmargin = vmargin = margin
-        # hmargin = 0.0 if self.no_side_images else margin
-        # vmargin = 0.0 if self.no_top_bottom_images else margin
+        margin = max(0.0, 0.5 * tan(pi/4 + eeVR.stitchMargin) - 0.5)
+        hmargin = 0.0 if self.no_side_images else margin
+        vmargin = 0.0 if self.no_top_bottom_images else margin
+        smargin = 0.0 if self.no_side_images else margin
         self.frag_shader = \
-           (commdef % (fovfrac, sidefrac, tbfrac, self.HFOV, self.VFOV, hmargin, vmargin, 0.0))\
+           (commdef % (fovfrac, sidefrac, tbfrac, self.HFOV, self.VFOV, hmargin, vmargin, smargin))\
          + (dome % domemodes[int(self.domeMethod)] if self.is_dome else equi)\
-         + fetch_setup + box_hclip + box_vclip\
+         + fetch_setup\
          + ('' if self.no_side_images else fetch_sides)\
          + ('' if self.no_top_bottom_images else fetch_top_bottom)\
          + ('' if self.no_back_image else (fetch_back % ((blend_seam_back_h if hmargin > 0.0 else '') + (blend_seam_back_v if vmargin > 0.0 else ''))))\
          + (fetch_front % ((blend_seam_front_h if hmargin > 0.0 else '') + (blend_seam_front_v if vmargin > 0.0 else '')))\
+         + (blend_seam_sides if smargin > 0.0 else '')\
          + '}'
         
         # Set the image name to the current time
@@ -357,23 +372,25 @@ class Renderer:
             int(ceil(self.image_size[0] * (pi/2 / self.FOV))),
             int(ceil(self.image_size[1] * (pi/2 / min(2*pi if self.is_dome else pi, self.FOV))))
         )
-        aspect_ratio = base_resolution[0] / float(base_resolution[1]) * 100.0
+        aspect_ratio = base_resolution[0] / float(base_resolution[1])
         tb_resolution = base_resolution[0], int(ceil(tbfrac * base_resolution[1]))
-        side_resolution = int(ceil(sidefrac * base_resolution[0])), base_resolution[1]
-        fb_resolution = base_resolution[0] + int(ceil(hmargin * base_resolution[0])), base_resolution[1] + int(ceil(vmargin * base_resolution[1]))
-        fb_aspect_ratio = fb_resolution[0] / float(fb_resolution[1]) * 100.0
-        margin_angle = (
-            (2 * self.scene.eeVR.stitchMargin) if hmargin > 0.0 else 0.0,
-            (2 * self.scene.eeVR.stitchMargin) if vmargin > 0.0 else 0.0
+        smargin_pixel = int(ceil(2 * smargin * base_resolution[1]))
+        side_resolution = int(ceil(sidefrac * base_resolution[0])), base_resolution[1] + smargin_pixel
+        side_angle = pi/2 + ((2 * self.scene.eeVR.stitchMargin) if smargin > 0.0 else 0.0)
+        side_shift_shift = (sin(self.scene.eeVR.stitchMargin) * 0.5) if smargin > 0.0 else 0.0
+        fb_resolution = (
+            base_resolution[0] + int(ceil(2 * hmargin * base_resolution[0])),
+            base_resolution[1] + int(ceil(2 * vmargin * base_resolution[1]))
         )
+        fb_angle = pi/2 + ((2 * self.scene.eeVR.stitchMargin) if vmargin > 0.0 else 0.0)
         # print(margin, hmargin, vmargin, margin_angle)
         self.camera_settings = {
-            'top': (0.0, 0.5*(tbfrac-1), pi/2, tb_resolution[0], tb_resolution[1], 100.0, aspect_ratio),
-            'bottom': (0.0, 0.5*(1-tbfrac), pi/2, tb_resolution[0], tb_resolution[1], 100.0, aspect_ratio),
-            'left': (0.5*(1-sidefrac), 0.0, pi/2, side_resolution[0], side_resolution[1], 100.0, aspect_ratio),
-            'right': (0.5*(sidefrac-1), 0.0, pi/2, side_resolution[0], side_resolution[1], 100.0, aspect_ratio),
-            'front': (0.0, 0.0, pi/2 + margin_angle[1], fb_resolution[0], fb_resolution[1], 100.0, fb_aspect_ratio),
-            'back': (0.0, 0.0, pi/2 + margin_angle[1], fb_resolution[0], fb_resolution[1], 100.0, fb_aspect_ratio)
+            'top': (0.0, 0.5*(tbfrac-1), pi/2, tb_resolution[0], tb_resolution[1], aspect_ratio),
+            'bottom': (0.0, 0.5*(1-tbfrac), pi/2, tb_resolution[0], tb_resolution[1], aspect_ratio),
+            'right': (0.5*(sidefrac-1)+side_shift_shift, 0.0, side_angle, side_resolution[0], side_resolution[1], aspect_ratio),
+            'left': (0.5*(1-sidefrac)-side_shift_shift, 0.0, side_angle, side_resolution[0], side_resolution[1], aspect_ratio),
+            'front': (0.0, 0.0, fb_angle, fb_resolution[0], fb_resolution[1], aspect_ratio),
+            'back': (0.0, 0.0, fb_angle, fb_resolution[0], fb_resolution[1], aspect_ratio)
         }
         if self.is_stereo:
             self.view_format = self.scene.render.image_settings.views_format
@@ -528,10 +545,10 @@ class Renderer:
         self.camera.data.angle = self.camera_settings[direction][2]
         self.scene.render.resolution_x = self.camera_settings[direction][3]
         self.scene.render.resolution_y = self.camera_settings[direction][4]
-        self.scene.render.pixel_aspect_x = self.camera_settings[direction][5]
-        self.scene.render.pixel_aspect_y = self.camera_settings[direction][6]
+        self.scene.render.pixel_aspect_x = 1.0
+        self.scene.render.pixel_aspect_y = self.camera_settings[direction][5]
         self.scene.render.resolution_percentage = 100
-        print(f"{direction} : {self.scene.render.resolution_x} x {self.scene.render.resolution_y}")
+        print(f"{direction} : {self.scene.render.resolution_x} x {self.scene.render.resolution_y} {degrees(self.camera.data.angle):.2f}° [{self.camera.data.shift_x}, {self.camera.data.shift_y}] ({self.scene.render.pixel_aspect_x} : {self.scene.render.pixel_aspect_y})")
 
 
     def clean_up(self, context):
@@ -543,7 +560,7 @@ class Renderer:
         self.scene.render.resolution_x = self.resolution_x_origin
         self.scene.render.resolution_y = self.resolution_y_origin
         self.scene.render.pixel_aspect_x = self.pixel_aspect_x_origin
-        self.scene.render.pixel_aspect_y = self.pixel_aspect_x_origin
+        self.scene.render.pixel_aspect_y = self.pixel_aspect_y_origin
         self.scene.render.resolution_percentage = self.resolution_percentage_origin
         if self.is_stereo:
             self.scene.render.image_settings.views_format = self.view_format

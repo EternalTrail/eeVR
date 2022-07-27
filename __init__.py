@@ -176,8 +176,6 @@ class ToolPanel(Panel):
             col.prop(props, 'HFOV')
         col.prop(props, 'VFOV')
         col.prop(props, 'stitchMargin')
-        col.prop(props, 'hclipMode')
-        col.prop(props, 'vclipMode')
         hfov = props.HFOV180 if props.fovModeEnum == "180" else props.HFOV
         if context.scene.render.use_multiview and hfov > radians(180) + 0.000001:
             col.label(icon='ERROR', text="eeVR cannot support stereo over 180° fov correctly.")
