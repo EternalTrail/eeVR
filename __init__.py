@@ -37,10 +37,6 @@ def has_invalid_condition(self : 'Operator', context : 'Context'):
     if context.scene.camera == None:
         self.report({'ERROR'}, "eeVR ERROR : Scene camera is not set.")
         return True
-    if context.scene.render.use_multiview:
-        if (context.scene.eeVR.HFOV180 if context.scene.eeVR.fovModeEnum == "180" else context.scene.eeVR.HFOV) > radians(180):
-            self.report({'ERROR'}, "eeVR ERROR : cannot support stereo over 180° fov.")
-            return True
     return False
 
 
@@ -180,6 +176,9 @@ class ToolPanel(Panel):
             col.prop(props, 'HFOV')
         col.prop(props, 'VFOV')
         col.prop(props, 'stitchMargin')
+        hfov = props.HFOV180 if props.fovModeEnum == "180" else props.HFOV
+        if context.scene.render.use_multiview and hfov > radians(180) + 0.000001:
+            col.label(icon='ERROR', text="eeVR cannot support stereo over 180° fov correctly.")
         layout.separator()
         col = layout.column()
         col.operator(RenderImage.bl_idname, text="Render Image")
@@ -215,8 +214,8 @@ class Properties(bpy.types.PropertyGroup):
     fovModeEnum: bpy.props.EnumProperty(
         items=[
             ("180", "180°", "VR 180"),
-            ("360", "360°", "VR 360 (over 180° not support stereo)"),
-            ("ANY", "Custom Fov", "over 180° not support stereo"),
+            ("360", "360°", "VR 360 (over 180°, not support stereo)"),
+            ("ANY", "Custom FOV", "over 180°, not support stereo"),
         ],
         default="180",
         name="VR Format",
@@ -225,6 +224,8 @@ class Properties(bpy.types.PropertyGroup):
     HFOV: bpy.props.FloatProperty(
         name="Horizontal FOV",
         subtype='ANGLE',
+        precision=0,
+        step=100,
         default=radians(360),
         min=radians(1),
         max=radians(360),
@@ -235,6 +236,8 @@ class Properties(bpy.types.PropertyGroup):
         name="Horizontal FOV",
         subtype='ANGLE',
         unit='ROTATION',
+        precision=0,
+        step=100,
         default=radians(180),
         min=radians(1),
         max=radians(180),
@@ -244,6 +247,9 @@ class Properties(bpy.types.PropertyGroup):
     VFOV: bpy.props.FloatProperty(
         name="Vertical FOV",
         subtype='ANGLE',
+        unit='ROTATION',
+        precision=0,
+        step=100,
         default=radians(180),
         min=radians(1),
         max=radians(180),
@@ -253,6 +259,9 @@ class Properties(bpy.types.PropertyGroup):
     stitchMargin: bpy.props.FloatProperty(
         name="Stitch Margin",
         subtype='ANGLE',
+        unit='ROTATION',
+        precision=0,
+        step=100,
         default=radians(5),
         min=radians(0),
         max=radians(45),

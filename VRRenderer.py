@@ -80,7 +80,12 @@ vec2 to_uv_back(vec3 pt)
 
 vec4 alphablend(vec4 a, vec4 b, float alpha)
 {
-    return (1.0 - alpha) * a + alpha * b;
+    return (1 - alpha) * a + alpha * b;
+}
+
+float atan2(in float y, in float x)
+{
+    return x == 0.0 ? sign(y) * 0.5 * PI : atan(y, x);
 }
 
 // Input cubemap textures
@@ -105,17 +110,18 @@ dome = '''
     
     // Calculate the position on unit sphere
     vec2 dunit = normalize(d);
-    float azimuth = FOVFRAC * PI * r;
+    float phi = FOVFRAC * PI * r;
     vec3 pt;
     %s
-    pt.z = cos(azimuth);
+    pt.z = cos(phi);
+    float azimuth = atan2(pt.x, pt.z);
 '''
 
 domemodes = [
-    'pt.xy = dunit * azimuth;',
-    'pt.xy = dunit * sin(azimuth);',
-    'pt.xy = 2.0 * dunit * sin(azimuth / 2.0);',
-    'pt.xy = 2.0 * dunit * tan(azimuth / 2.0);'
+    'pt.xy = dunit * phi;',
+    'pt.xy = dunit * sin(phi);',
+    'pt.xy = 2.0 * dunit * sin(phi * 0.5);',
+    'pt.xy = 2.0 * dunit * tan(phi * 0.5);'
 ]
 
 equi = '''
@@ -135,43 +141,46 @@ fetch_setup = '''
     // left or right
     float lor = step(abs(pt.y), abs(pt.x)) * step(abs(pt.z), abs(pt.x));
     // top or bottom
-    float tob = (1.0 - lor) * step(abs(pt.z), abs(pt.y));
+    float tob = (1 - lor) * step(abs(pt.z), abs(pt.y));
     // front or back
-    float fob = (1.0 - lor) * (1.0 - tob);
-    float right = step(0.0, pt.x);
-    float up = step(0.0, pt.y);
-    float front = step(0.0, pt.z);
+    float fob = (1 - lor) * (1 - tob);
+    float right = step(0, pt.x);
+    float up = step(0, pt.y);
+    float front = step(0, pt.z);
+
+    // clip
     {
+        float over45 = step(0.25 * PI, abs(azimuth));
+        float over135 = step(0.75 * PI, abs(azimuth));
         float angle = 0.0;
-        angle = (fob + tob) * (1.0 - step(0.25 * PI, abs(azimuth))) * front * abs(pt.x/pt.z) * 0.25 * PI;
-        angle += (lor + tob) * step(0.25 * PI, abs(azimuth)) * (1.0 - step(0.75 * PI, abs(azimuth))) * right * (2 - pt.z/pt.x) * 0.25 * PI;
-        angle += (lor + tob) * step(0.25 * PI, abs(azimuth)) * (1.0 - step(0.75 * PI, abs(azimuth))) * (1.0 - right) * (pt.z/pt.x + 2) * 0.25 * PI;
-        angle += (fob + tob) * step(0.75 * PI, abs(azimuth)) * (1.0 - front) * (4 - abs(pt.x/pt.z)) * 0.25 * PI;
-        if(angle > HCLIP * 0.5) discard;
-    }
-    {
-        float angle = 0.0;
-        angle = fob * abs(pt.y/pt.z) * 0.5 * PI;
-        angle += lor * abs(pt.y/pt.x) * 0.5 * PI;
-        angle += tob * (2 - abs(pt.z/pt.y)) * 0.5 * PI;
+        angle = (fob + tob) * (1 - over45) * front * abs(pt.x/pt.z) * 0.5 * PI;
+        angle += (lor + tob) * over45 * (1 - over135) * right * (2 - pt.z/pt.x) * 0.5 * PI;
+        angle += (lor + tob) * over45 * (1 - over135) * (1 - right) * (pt.z/pt.x + 2) * 0.5 * PI;
+        angle += (fob + tob) * over135 * (1 - front) * (4 - abs(pt.x/pt.z)) * 0.5 * PI;
+        if(angle > HCLIP) discard;
+
+        angle = fob * ((1 - over45) + over135) * abs(pt.y/pt.z) * 0.5 * PI;
+        angle += lor * over45 * (1 - over135) * abs(pt.y/pt.x) * 0.5 * PI;
+        angle += tob * ((1 - over45) + over135) * (2 - abs(pt.z/pt.y)) * 0.5 * PI;
+        angle += tob * over45 * (1 - over135) * (2 - abs(pt.x/pt.y)) * 0.5 * PI;
         if(angle > VCLIP) discard;
     }
 '''
 
 fetch_sides = '''
     fragColor += lor * right * texture(cubeRightImage, to_uv_right(pt));
-    fragColor += lor * (1.0 - right) * texture(cubeLeftImage, to_uv_left(pt));
+    fragColor += lor * (1 - right) * texture(cubeLeftImage, to_uv_left(pt));
 '''
 
 fetch_top_bottom = '''
     fragColor += tob * up * texture(cubeTopImage, to_uv_top(pt));
-    fragColor += tob * (1.0 - up) * texture(cubeBottomImage, to_uv_bottom(pt));
+    fragColor += tob * (1 - up) * texture(cubeBottomImage, to_uv_bottom(pt));
 '''
 
 fetch_back = '''
     {
         vec2 uv = to_uv_back(pt);
-        fragColor += fob * (1.0 - front) * texture(cubeBackImage, uv);
+        fragColor += fob * (1 - front) * texture(cubeBackImage, uv);
 %s
     }
 '''
@@ -189,7 +198,7 @@ blend_seam_front_h = '''
             float alpha = front * lor * right * smoothstep(1.0, 0.0, clamp((uv.x - HMARGINSCALE - HMARGIN) / HMARGIN, 0.0, 1.0));
             fragColor = alphablend(fragColor, texture(cubeFrontImage, uv), alpha);
             
-            alpha = front * lor * (1.0 - right) * smoothstep(0.0, 1.0, clamp(uv.x / HMARGIN, 0.0, 1.0));
+            alpha = front * lor * (1 - right) * smoothstep(0.0, 1.0, clamp(uv.x / HMARGIN, 0.0, 1.0));
             fragColor = alphablend(fragColor, texture(cubeFrontImage, uv), alpha);
         }
 '''
@@ -199,27 +208,27 @@ blend_seam_front_v = '''
             float alpha = front * tob * up * smoothstep(1.0, 0.0, clamp((uv.y - VMARGINSCALE - VMARGIN) / VMARGIN, 0.0, 1.0));
             fragColor = alphablend(fragColor, texture(cubeFrontImage, uv), alpha);
 
-            alpha = front * tob * (1.0 - up) * smoothstep(0.0, 1.0, clamp(uv.y / VMARGIN, 0.0, 1.0));
+            alpha = front * tob * (1 - up) * smoothstep(0.0, 1.0, clamp(uv.y / VMARGIN, 0.0, 1.0));
             fragColor = alphablend(fragColor, texture(cubeFrontImage, uv), alpha);
         }
 '''
 
 blend_seam_back_h = '''
         {
-            float alpha = (1.0 - front) * lor * right * smoothstep(1.0, 0.0, clamp((1.0 - uv.x - HMARGINSCALE - HMARGIN) / HMARGIN, 0.0, 1.0));
+            float alpha = (1 - front) * lor * right * smoothstep(1.0, 0.0, clamp((1.0 - uv.x - HMARGINSCALE - HMARGIN) / HMARGIN, 0.0, 1.0));
             fragColor = alphablend(fragColor, texture(cubeBackImage, uv), alpha);
             
-            alpha = (1.0 - front) * lor * (1.0 - right) * smoothstep(0.0, 1.0, clamp((1.0 - uv.x) / HMARGIN, 0.0, 1.0));
+            alpha = (1 - front) * lor * (1 - right) * smoothstep(0.0, 1.0, clamp((1.0 - uv.x) / HMARGIN, 0.0, 1.0));
             fragColor = alphablend(fragColor, texture(cubeBackImage, uv), alpha);
         }
 '''
 
 blend_seam_back_v = '''
         {
-            float alpha = (1.0 - front) * tob * up * smoothstep(1.0, 0.0, clamp((uv.y - VMARGINSCALE - VMARGIN) / VMARGIN, 0.0, 1.0));
+            float alpha = (1 - front) * tob * up * smoothstep(1.0, 0.0, clamp((uv.y - VMARGINSCALE - VMARGIN) / VMARGIN, 0.0, 1.0));
             fragColor = alphablend(fragColor, texture(cubeBackImage, uv), alpha);
 
-            alpha = (1.0 - front) * tob * (1.0 - up) * smoothstep(0.0, 1.0, clamp(uv.y / VMARGIN, 0.0, 1.0));
+            alpha = (1 - front) * tob * (1.0 - up) * smoothstep(0.0, 1.0, clamp(uv.y / VMARGIN, 0.0, 1.0));
             fragColor = alphablend(fragColor, texture(cubeBackImage, uv), alpha);
         }
 '''
@@ -237,14 +246,18 @@ void main() {
 }
 '''
 
+
 def snap_angle(src):
     if abs(src - pi/2) < 0.000001:
         return pi/2
     elif abs(src - pi) < 0.000001:
         return pi
+    elif abs(src - 3*pi/2) < 0.000001:
+        return 3*pi/2
     elif abs(src - 2*pi) < 0.000001:
         return 2*pi
     return src
+
 
 class Renderer:
     
