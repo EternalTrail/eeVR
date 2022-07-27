@@ -264,7 +264,7 @@ class Properties(bpy.types.PropertyGroup):
         step=100,
         default=radians(5),
         min=radians(0),
-        max=radians(45),
+        max=radians(10),
         description="Margin for Seam Blending in degrees",
     )
 

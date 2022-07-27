@@ -24,6 +24,9 @@ const float INVTBFRAC = 1 / TBFRAC;
 const float HMARGINSCALE = 1 / (1 + 2 * HMARGIN);
 const float VMARGINSCALE = 1 / (1 + 2 * VMARGIN);
 const float SMARGINSCALE = 1 / (1 + 2 * SMARGIN);
+const float HMARGINSIZE = 1 - 2 * HMARGIN;
+const float VMARGINSIZE = 1 - 2 * VMARGIN;
+const float SMARGINSIZE = 1 - 2 * SMARGIN;
 
 vec2 tr(vec2 src, vec2 offset, vec2 scale)
 {
@@ -198,7 +201,7 @@ fetch_front = '''
 
 blend_seam_front_h = '''
         {
-            float alpha = front * lor * right * smoothstep(1.0, 0.0, clamp((uv.x - HMARGINSCALE - HMARGIN) / HMARGIN, 0.0, 1.0));
+            float alpha = front * lor * right * smoothstep(1.0, 0.0, clamp((uv.x - HMARGINSIZE - HMARGIN) / HMARGIN, 0.0, 1.0));
             fragColor = mix(fragColor, texture(cubeFrontImage, uv), alpha);
             
             alpha = front * lor * (1 - right) * smoothstep(0.0, 1.0, clamp(uv.x / HMARGIN, 0.0, 1.0));
@@ -208,7 +211,7 @@ blend_seam_front_h = '''
 
 blend_seam_front_v = '''
         {
-            float alpha = front * tob * up * smoothstep(1.0, 0.0, clamp((uv.y - VMARGINSCALE - VMARGIN) / VMARGIN, 0.0, 1.0));
+            float alpha = front * tob * up * smoothstep(1.0, 0.0, clamp((uv.y - VMARGINSIZE - VMARGIN) / VMARGIN, 0.0, 1.0));
             fragColor = mix(fragColor, texture(cubeFrontImage, uv), alpha);
 
             alpha = front * tob * (1 - up) * smoothstep(0.0, 1.0, clamp(uv.y / VMARGIN, 0.0, 1.0));
@@ -218,7 +221,7 @@ blend_seam_front_v = '''
 
 blend_seam_back_h = '''
         {
-            float alpha = (1 - front) * lor * right * smoothstep(1.0, 0.0, clamp((1.0 - uv.x - HMARGINSCALE - HMARGIN) / HMARGIN, 0.0, 1.0));
+            float alpha = (1 - front) * lor * right * smoothstep(1.0, 0.0, clamp((1.0 - uv.x - HMARGINSIZE - HMARGIN) / HMARGIN, 0.0, 1.0));
             fragColor = mix(fragColor, texture(cubeBackImage, uv), alpha);
             
             alpha = (1 - front) * lor * (1 - right) * smoothstep(0.0, 1.0, clamp((1.0 - uv.x) / HMARGIN, 0.0, 1.0));
@@ -228,7 +231,7 @@ blend_seam_back_h = '''
 
 blend_seam_back_v = '''
         {
-            float alpha = (1 - front) * tob * up * smoothstep(1.0, 0.0, clamp((uv.y - VMARGINSCALE - VMARGIN) / VMARGIN, 0.0, 1.0));
+            float alpha = (1 - front) * tob * up * smoothstep(1.0, 0.0, clamp((uv.y - VMARGINSIZE - VMARGIN) / VMARGIN, 0.0, 1.0));
             fragColor = mix(fragColor, texture(cubeBackImage, uv), alpha);
 
             alpha = (1 - front) * tob * (1 - up) * smoothstep(0.0, 1.0, clamp(uv.y / VMARGIN, 0.0, 1.0));
@@ -240,13 +243,13 @@ blend_seam_sides = '''
     {
         float range = over45 * (1 - over135);
         
-        float alpha = range * right * tob * up * smoothstep(1.0, 0.0, clamp((right_uv.y - SMARGINSCALE - SMARGIN) / SMARGIN, 0.0, 1.0));
+        float alpha = range * right * tob * up * smoothstep(1.0, 0.0, clamp((right_uv.y - SMARGINSIZE - SMARGIN) / SMARGIN, 0.0, 1.0));
         fragColor = mix(fragColor, texture(cubeRightImage, right_uv), alpha);
 
         alpha = range * right * tob * (1 - up) * smoothstep(0.0, 1.0, clamp(right_uv.y / SMARGIN, 0.0, 1.0));
         fragColor = mix(fragColor, texture(cubeRightImage, right_uv), alpha);
 
-        alpha = range * (1 - right) * tob * up * smoothstep(1.0, 0.0, clamp((left_uv.y - SMARGINSCALE - SMARGIN) / SMARGIN, 0.0, 1.0));
+        alpha = range * (1 - right) * tob * up * smoothstep(1.0, 0.0, clamp((left_uv.y - SMARGINSIZE - SMARGIN) / SMARGIN, 0.0, 1.0));
         fragColor = mix(fragColor, texture(cubeLeftImage, left_uv), alpha);
 
         alpha = range * (1 - right) * tob * (1 - up) * smoothstep(0.0, 1.0, clamp(left_uv.y / SMARGIN, 0.0, 1.0));
