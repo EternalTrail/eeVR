@@ -117,7 +117,6 @@ dome = '''
     %s
     pt.z = cos(phi);
     float azimuth = atan2(pt.x, pt.z);
-    float elevation = atan2(pt.y, length(pt.xz));
 '''
 
 domemodes = [
@@ -174,26 +173,6 @@ box_vclip = '''
         if(angle > VCLIP*0.5) discard;
     }
 '''
-
-sph_hclip = '''
-    if(abs(azimuth) > HCLIP*0.5) discard;
-'''
-
-sph_vclip = '''
-    if(abs(elevation) > VCLIP*0.5) discard;
-'''
-
-clip_h = {
-    'None': '',
-    'Boxical': box_hclip,
-    'Spherical': sph_hclip,
-}
-
-clip_v = {
-    'None': '',
-    'Boxical': box_vclip,
-    'Spherical': sph_vclip,
-}
 
 fetch_sides = '''
     fragColor += lor * right * texture(cubeRightImage, to_uv_right(pt));
@@ -319,7 +298,7 @@ class Renderer:
         self.is_stereo = context.scene.render.use_multiview
         self.is_animation = is_animation
         self.is_dome = (eeVR.renderModeEnum == 'DOME')
-        self.domeMethod = bpy.context.scene.eeVR.domeMethodEnum
+        self.domeMethod = eeVR.domeMethodEnum
         self.HFOV = snap_angle(eeVR.HFOV180 if eeVR.fovModeEnum == '180' else eeVR.HFOV)
         self.VFOV = snap_angle(eeVR.VFOV)
         self.FOV = pi if eeVR.fovModeEnum == '180' else 2 * pi if eeVR.fovModeEnum == '360' else max(self.HFOV, self.VFOV)
@@ -344,7 +323,7 @@ class Renderer:
         self.frag_shader = \
            (commdef % (fovfrac, sidefrac, tbfrac, self.HFOV, self.VFOV, hmargin, vmargin, 0.0))\
          + (dome % domemodes[int(self.domeMethod)] if self.is_dome else equi)\
-         + fetch_setup + clip_h[eeVR.hclipMode] + clip_v[eeVR.vclipMode]\
+         + fetch_setup + box_hclip + box_vclip\
          + ('' if self.no_side_images else fetch_sides)\
          + ('' if self.no_top_bottom_images else fetch_top_bottom)\
          + ('' if self.no_back_image else (fetch_back % ((blend_seam_back_h if hmargin > 0.0 else '') + (blend_seam_back_v if vmargin > 0.0 else ''))))\
