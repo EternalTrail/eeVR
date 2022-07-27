@@ -17,11 +17,13 @@ commdef = '''
 #define VCLIP    %f
 #define HMARGIN  %f
 #define VMARGIN  %f
+#define SMARGIN  %f
 
 const float INVSIDEFRAC = 1 / SIDEFRAC;
 const float INVTBFRAC = 1 / TBFRAC;
 const float HMARGINSCALE = 1 - 2 * HMARGIN;
 const float VMARGINSCALE = 1 - 2 * VMARGIN;
+const float SMARGINSCALE = 1 - 2 * SMARGIN;
 
 vec2 tr(vec2 src, vec2 offset, vec2 scale)
 {
@@ -43,14 +45,19 @@ vec2 to_uv(float x, float y)
     return tr(vec2(x, y), 1.0, 0.5);
 }
 
+vec2 apply_side_margin(vec2 src)
+{
+    return src * vec2(SMARGINSCALE, 1) + vec2(SMARGIN, 0);
+}
+
 vec2 to_uv_right(vec3 pt)
 {
-    return to_uv(-pt.z/pt.x, pt.y/pt.x) * vec2(INVSIDEFRAC, 1);
+    return apply_side_margin(to_uv(-pt.z/pt.x, pt.y/pt.x) * vec2(INVSIDEFRAC, 1));
 }
 
 vec2 to_uv_left(vec3 pt)
 {
-    return tr(to_uv(-pt.z/pt.x, -pt.y/pt.x), vec2(SIDEFRAC - 1, 0), vec2(INVSIDEFRAC, 1));
+    return tr(apply_side_margin(to_uv(-pt.z/pt.x, -pt.y/pt.x)), vec2(SIDEFRAC - 1, 0), vec2(INVSIDEFRAC, 1));
 }
 
 vec2 to_uv_top(vec3 pt)
@@ -76,11 +83,6 @@ vec2 to_uv_front(vec3 pt)
 vec2 to_uv_back(vec3 pt)
 {
     return apply_margin(to_uv(pt.x/pt.z, -pt.y/pt.z));
-}
-
-vec4 alphablend(vec4 a, vec4 b, float alpha)
-{
-    return (1 - alpha) * a + alpha * b;
 }
 
 float atan2(in float y, in float x)
@@ -154,7 +156,7 @@ box_hclip = '''
     {
         float over45 = step(0.25 * PI, abs(azimuth));
         float over135 = step(0.75 * PI, abs(azimuth));
-        float angle = 0.0;
+        float angle;
         angle = (fob + tob) * (1 - over45) * front * abs(pt.x/pt.z) * 0.25 * PI;
         angle += (lor + tob) * over45 * (1 - over135) * right * (2 - pt.z/pt.x) * 0.25 * PI;
         angle += (lor + tob) * over45 * (1 - over135) * (1 - right) * (pt.z/pt.x + 2) * 0.25 * PI;
@@ -165,13 +167,10 @@ box_hclip = '''
 
 box_vclip = '''
     {
-        float over45 = step(0.25 * PI, abs(azimuth));
-        float over135 = step(0.75 * PI, abs(azimuth));
-        float angle = 0.0;
-        angle = fob * ((1 - over45) + over135) * abs(pt.y/pt.z) * 0.25 * PI;
-        angle += lor * over45 * (1 - over135) * abs(pt.y/pt.x) * 0.25 * PI;
-        angle += tob * ((1 - over45) + over135) * (2 - abs(pt.z/pt.y)) * 0.25 * PI;
-        angle += tob * over45 * (1 - over135) * (2 - abs(pt.x/pt.y)) * 0.25 * PI;
+        float near_horizon = step(abs(pt.y), abs(pt.z));
+        float angle;
+        angle = (fob + lor * near_horizon) * abs(pt.y/pt.z) * 0.25 * PI;
+        angle += (tob + lor * (1 - near_horizon)) * (2 - abs(pt.z/pt.y)) * 0.25 * PI;
         if(angle > VCLIP*0.5) discard;
     }
 '''
@@ -192,7 +191,6 @@ clip_h = {
 
 clip_v = {
     'None': '',
-    'Boxical Horizon': box_vclip,
     'Boxical': box_vclip,
     'Spherical': sph_vclip,
 }
@@ -226,40 +224,40 @@ fetch_front = '''
 blend_seam_front_h = '''
         {
             float alpha = front * lor * right * smoothstep(1.0, 0.0, clamp((uv.x - HMARGINSCALE - HMARGIN) / HMARGIN, 0.0, 1.0));
-            fragColor = alphablend(fragColor, texture(cubeFrontImage, uv), alpha);
+            fragColor = mix(fragColor, texture(cubeFrontImage, uv), alpha);
             
             alpha = front * lor * (1 - right) * smoothstep(0.0, 1.0, clamp(uv.x / HMARGIN, 0.0, 1.0));
-            fragColor = alphablend(fragColor, texture(cubeFrontImage, uv), alpha);
+            fragColor = mix(fragColor, texture(cubeFrontImage, uv), alpha);
         }
 '''
 
 blend_seam_front_v = '''
         {
             float alpha = front * tob * up * smoothstep(1.0, 0.0, clamp((uv.y - VMARGINSCALE - VMARGIN) / VMARGIN, 0.0, 1.0));
-            fragColor = alphablend(fragColor, texture(cubeFrontImage, uv), alpha);
+            fragColor = mix(fragColor, texture(cubeFrontImage, uv), alpha);
 
             alpha = front * tob * (1 - up) * smoothstep(0.0, 1.0, clamp(uv.y / VMARGIN, 0.0, 1.0));
-            fragColor = alphablend(fragColor, texture(cubeFrontImage, uv), alpha);
+            fragColor = mix(fragColor, texture(cubeFrontImage, uv), alpha);
         }
 '''
 
 blend_seam_back_h = '''
         {
             float alpha = (1 - front) * lor * right * smoothstep(1.0, 0.0, clamp((1.0 - uv.x - HMARGINSCALE - HMARGIN) / HMARGIN, 0.0, 1.0));
-            fragColor = alphablend(fragColor, texture(cubeBackImage, uv), alpha);
+            fragColor = mix(fragColor, texture(cubeBackImage, uv), alpha);
             
             alpha = (1 - front) * lor * (1 - right) * smoothstep(0.0, 1.0, clamp((1.0 - uv.x) / HMARGIN, 0.0, 1.0));
-            fragColor = alphablend(fragColor, texture(cubeBackImage, uv), alpha);
+            fragColor = mix(fragColor, texture(cubeBackImage, uv), alpha);
         }
 '''
 
 blend_seam_back_v = '''
         {
             float alpha = (1 - front) * tob * up * smoothstep(1.0, 0.0, clamp((uv.y - VMARGINSCALE - VMARGIN) / VMARGIN, 0.0, 1.0));
-            fragColor = alphablend(fragColor, texture(cubeBackImage, uv), alpha);
+            fragColor = mix(fragColor, texture(cubeBackImage, uv), alpha);
 
             alpha = (1 - front) * tob * (1.0 - up) * smoothstep(0.0, 1.0, clamp(uv.y / VMARGIN, 0.0, 1.0));
-            fragColor = alphablend(fragColor, texture(cubeBackImage, uv), alpha);
+            fragColor = mix(fragColor, texture(cubeBackImage, uv), alpha);
         }
 '''
 
@@ -344,7 +342,7 @@ class Renderer:
         # hmargin = 0.0 if self.no_side_images else margin
         # vmargin = 0.0 if self.no_top_bottom_images else margin
         self.frag_shader = \
-           (commdef % (fovfrac, sidefrac, tbfrac, self.HFOV, self.VFOV, hmargin, vmargin))\
+           (commdef % (fovfrac, sidefrac, tbfrac, self.HFOV, self.VFOV, hmargin, vmargin, 0.0))\
          + (dome % domemodes[int(self.domeMethod)] if self.is_dome else equi)\
          + fetch_setup + clip_h[eeVR.hclipMode] + clip_v[eeVR.vclipMode]\
          + ('' if self.no_side_images else fetch_sides)\

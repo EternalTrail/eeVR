@@ -270,24 +270,20 @@ class Properties(bpy.types.PropertyGroup):
         description="Margin for Seam Blending in degrees",
     )
 
+    clipModeEnumItems=[
+        ("Boxical", "Boxical", "Boxical"),
+        ("Spherical", "Spherical", "Spherical"),
+    ]
+
     hclipMode: bpy.props.EnumProperty(
-        items=[
-            ("None", "None", "None"),
-            ("Boxical", "Boxical", "Boxical"),
-            ("Spherical", "Spherical", "Spherical"),
-        ],
-        default="None",
+        items=clipModeEnumItems,
+        default="Boxical",
         name="Horizontal Clip Mode",
     )
 
     vclipMode: bpy.props.EnumProperty(
-        items=[
-            ("None", "None", "None"),
-            ("Boxical Horizon", "Boxical Horizon", "Boxical Horizon"),
-            ("Boxical", "Boxical", "Boxical"),
-            ("Spherical", "Spherical", "Spherical"),
-        ],
-        default="None",
+        items=clipModeEnumItems,
+        default="Boxical",
         name="Vertical Clip Mode",
     )
 
