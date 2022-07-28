@@ -162,7 +162,7 @@ class ToolPanel(Panel):
 
     def draw(self, context):
 
-        props = context.scene.eeVR
+        props : Properties = context.scene.eeVR
         # Draw the buttons for each of the rendering operators
         layout = self.layout
         col = layout.column()
@@ -173,11 +173,14 @@ class ToolPanel(Panel):
         if props.fovModeEnum == '180':
             col.prop(props, 'HFOV180')
         else:
-            col.prop(props, 'HFOV')
+            col.prop(props, 'HFOV360')
         col.prop(props, 'VFOV')
         col.prop(props, 'stitchMargin')
-        hfov = props.HFOV180 if props.fovModeEnum == "180" else props.HFOV
-        if context.scene.render.use_multiview and hfov > radians(180) + 0.000001:
+        col = layout.column()
+        col.prop(props, 'noSidePlane')
+        col.enabled = props.IsEnableNoSidePlane()
+        if context.scene.render.use_multiview and props.GetHFOV() > radians(180):
+            col = layout.column()
             col.label(icon='ERROR', text="eeVR cannot support stereo over 180° fov correctly.")
         layout.separator()
         col = layout.column()
@@ -221,7 +224,7 @@ class Properties(bpy.types.PropertyGroup):
         name="VR Format",
     )
 
-    HFOV: bpy.props.FloatProperty(
+    HFOV360: bpy.props.FloatProperty(
         name="Horizontal FOV",
         subtype='ANGLE',
         precision=0,
@@ -268,10 +271,40 @@ class Properties(bpy.types.PropertyGroup):
         description="Margin for Seam Blending in degrees",
     )
 
+    noSidePlane: bpy.props.BoolProperty(
+        name="No Side Plane",
+        default=False,
+        description="Not render side view. This is enable when HFOV under 160",
+    )
+
     cancel: bpy.props.BoolProperty(
         name="Cancel",
         default=True
     )
+
+    @staticmethod
+    def snap_angle(src):
+        if abs(src - radians(90)) < 0.000001:
+            return radians(90)
+        elif abs(src - radians(180)) < 0.000001:
+            return radians(180)
+        elif abs(src - radians(270)) < 0.000001:
+            return radians(270)
+        elif abs(src - radians(360)) < 0.000001:
+            return radians(360)
+        return src
+
+    def GetHFOV(self):
+        return self.snap_angle(self.HFOV180 if self.fovModeEnum == '180' else self.HFOV360)
+
+    def GetVFOV(self):
+        return self.snap_angle(self.VFOV)
+
+    def IsEnableNoSidePlane(self):
+        return self.GetHFOV() < radians(165)
+
+    def GetNoSidePlane(self):
+        return self.IsEnableNoSidePlane() and self.noSidePlane
 
     @classmethod
     def register(cls):

@@ -268,18 +268,6 @@ void main() {
 '''
 
 
-def snap_angle(src):
-    if abs(src - pi/2) < 0.000001:
-        return pi/2
-    elif abs(src - pi) < 0.000001:
-        return pi
-    elif abs(src - 3*pi/2) < 0.000001:
-        return 3*pi/2
-    elif abs(src - 2*pi) < 0.000001:
-        return 2*pi
-    return src
-
-
 class Renderer:
     
     def __init__(self, context, is_animation = False, folder = ''):
@@ -313,8 +301,8 @@ class Renderer:
         self.is_animation = is_animation
         self.is_dome = (eeVR.renderModeEnum == 'DOME')
         self.domeMethod = eeVR.domeMethodEnum
-        self.HFOV = snap_angle(eeVR.HFOV180 if eeVR.fovModeEnum == '180' else eeVR.HFOV)
-        self.VFOV = snap_angle(eeVR.VFOV)
+        self.HFOV = eeVR.GetHFOV()
+        self.VFOV = eeVR.GetVFOV()
         self.FOV = pi if eeVR.fovModeEnum == '180' else 2 * pi if eeVR.fovModeEnum == '360' else max(self.HFOV, self.VFOV)
         self.no_back_image = (self.HFOV <= 3*pi/2)
         self.no_side_images = (self.HFOV <= pi/2)
@@ -371,13 +359,13 @@ class Renderer:
             int(ceil(self.image_size[0] * (pi/2 / self.FOV))),
             int(ceil(self.image_size[1] * (pi/2 / min(2*pi if self.is_dome else pi, self.FOV))))
         )
-        aspect_ratio = base_resolution[0] / float(base_resolution[1])
-        margin_pixels = int(ceil(2 * hmargin * base_resolution[0])), int(ceil(2 * vmargin * base_resolution[1]))
-        tb_resolution = base_resolution[0], int(ceil(tbfrac * base_resolution[1]))
-        side_resolution = int(ceil(sidefrac * base_resolution[0])), base_resolution[1] + margin_pixels[1]
+        aspect_ratio = base_resolution[0] / base_resolution[1]
+        tb_resolution = self.trans_resolution(base_resolution, 1, tbfrac, 0, 0)
+        side_resolution = self.trans_resolution(base_resolution, sidefrac, 1, 0, vmargin)
         side_angle = pi/2 + ((2 * self.scene.eeVR.stitchMargin) if vmargin > 0.0 else 0.0)
-        side_shift_shift = (sin(self.scene.eeVR.stitchMargin) * 0.5) if vmargin > 0.0 else 0.0
-        fb_resolution = base_resolution[0] + margin_pixels[0], base_resolution[1] + margin_pixels[1]
+        side_shift_shift = ((vmargin / (1 + vmargin)) * (side_resolution[0] / side_resolution[1] / aspect_ratio)) if vmargin > 0.0 else 0.0
+        print(side_shift_shift, 0.5*(sidefrac-1), 0.5*(sidefrac-1)+side_shift_shift)
+        fb_resolution = self.trans_resolution(base_resolution, 1, 1, hmargin, vmargin)
         fb_angle = pi/2 + ((2 * self.scene.eeVR.stitchMargin) if vmargin > 0.0 else 0.0)
         # print(margin, hmargin, vmargin, margin_angle)
         self.camera_settings = {
@@ -395,7 +383,12 @@ class Renderer:
             self.scene.render.image_settings.stereo_3d_format.display_mode = 'TOPBOTTOM'
         
         self.direction_offsets = self.find_direction_offsets()
-    
+
+
+    @staticmethod
+    def trans_resolution(src, hscale, vscale, hmargin, vmargin):
+        return int(ceil(src[0] * hscale + 2 * hmargin * src[0])), int(ceil(src[1] * vscale + 2 * vmargin * src[1]))
+
     
     def cubemap_to_panorama(self, imageList, outputName):
         
