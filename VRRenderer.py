@@ -533,8 +533,12 @@ class Renderer:
         self.camera.data.angle = self.camera_settings[direction][2]
         self.scene.render.resolution_x = self.camera_settings[direction][3]
         self.scene.render.resolution_y = self.camera_settings[direction][4]
-        self.scene.render.pixel_aspect_x = 1.0
-        self.scene.render.pixel_aspect_y = self.camera_settings[direction][5]
+        if self.camera_settings[direction][5] >= 1.0:
+            self.scene.render.pixel_aspect_x = 1.0
+            self.scene.render.pixel_aspect_y = self.camera_settings[direction][5]
+        else:
+            self.scene.render.pixel_aspect_x = 1 / self.camera_settings[direction][5]
+            self.scene.render.pixel_aspect_y = 1.0
         self.scene.render.resolution_percentage = 100
         print(f"{direction} : {self.scene.render.resolution_x} x {self.scene.render.resolution_y} {degrees(self.camera.data.angle):.2f}° [{self.camera.data.shift_x}, {self.camera.data.shift_y}] ({self.scene.render.pixel_aspect_x} : {self.scene.render.pixel_aspect_y})")
 
