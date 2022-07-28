@@ -368,8 +368,8 @@ class Renderer:
         fb_angle = pi/2 + ((2 * self.scene.eeVR.stitchMargin) if vmargin > 0.0 else 0.0)
         # print(margin, hmargin, vmargin, margin_angle)
         self.camera_settings = {
-            'top': (0.0, 0.5*(tbfrac-1)*aspect_ratio, pi/2, tb_resolution[0], tb_resolution[1], aspect_ratio),
-            'bottom': (0.0, 0.5*(1-tbfrac)*aspect_ratio, pi/2, tb_resolution[0], tb_resolution[1], aspect_ratio),
+            'top': (0.0, 0.5*(tbfrac-1), pi/2, tb_resolution[0], tb_resolution[1], aspect_ratio),
+            'bottom': (0.0, 0.5*(1-tbfrac), pi/2, tb_resolution[0], tb_resolution[1], aspect_ratio),
             'right': (0.5*(sidefrac-1)+side_shift_shift, 0.0, side_angle, side_resolution[0], side_resolution[1], aspect_ratio),
             'left': (0.5*(1-sidefrac)-side_shift_shift, 0.0, side_angle, side_resolution[0], side_resolution[1], aspect_ratio),
             'front': (0.0, 0.0, fb_angle, fb_resolution[0], fb_resolution[1], aspect_ratio),
