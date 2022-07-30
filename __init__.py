@@ -22,13 +22,13 @@ bl_info = {
     "name": "eeVR",
     "description": "Render in different projections using Eevee engine",
     "author": "EternalTrail, SAMtak",
-    "version": (0, 3, 1),
+    "version": (0, 4, 0),
     "blender": (3, 0, 0),
     "location": "View3D > Tool Tab (Available when EEVEE or Workbench)",
     "warning": "This addon is still in early alpha, may break your blend file!",
     "wiki_url": "https://github.com/EternalTrail/eeVR",
     "tracker_url": "https://github.com/SAM-tak/eeVR/issues",
-    "support": "TESTING",
+    "support": "COMMUNITY",
     "category": "Render",
 }
 
