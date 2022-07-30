@@ -329,7 +329,7 @@ class Renderer:
          + ('' if self.no_top_bottom_images else fetch_top_bottom)\
          + ('' if self.no_back_image else (fetch_back % ((blend_seam_back_h if hmargin > 0.0 else '') + (blend_seam_back_v if vmargin > 0.0 else ''))))\
          + (fetch_front % ((blend_seam_front_h if hmargin > 0.0 else '') + (blend_seam_front_v if vmargin > 0.0 else '')))\
-         + (blend_seam_sides if vmargin > 0.0 else '')\
+         + (blend_seam_sides if not self.no_side_images and vmargin > 0.0 else '')\
          + '}'
         
         # Set the image name to the current time
@@ -363,15 +363,14 @@ class Renderer:
         tb_resolution = self.trans_resolution(base_resolution, 1, tbfrac, 0, 0)
         side_resolution = self.trans_resolution(base_resolution, sidefrac, 1, 0, vmargin)
         side_angle = pi/2 + ((2 * self.scene.eeVR.stitchMargin) if vmargin > 0.0 else 0.0)
-        side_shift_shift = (vmargin / aspect_ratio * side_resolution[0] / side_resolution[1]) if vmargin > 0.0 else 0.0
+        side_shift_scale = 1 / (1 + 2 * vmargin)
         fb_resolution = self.trans_resolution(base_resolution, 1, 1, hmargin, vmargin)
         fb_angle = pi/2 + ((2 * self.scene.eeVR.stitchMargin) if vmargin > 0.0 else 0.0)
-        # print(margin, hmargin, vmargin, margin_angle)
         self.camera_settings = {
             'top': (0.0, 0.5*(tbfrac-1), pi/2, tb_resolution[0], tb_resolution[1], aspect_ratio),
             'bottom': (0.0, 0.5*(1-tbfrac), pi/2, tb_resolution[0], tb_resolution[1], aspect_ratio),
-            'right': (0.5*(sidefrac-1)+side_shift_shift, 0.0, side_angle, side_resolution[0], side_resolution[1], aspect_ratio),
-            'left': (0.5*(1-sidefrac)-side_shift_shift, 0.0, side_angle, side_resolution[0], side_resolution[1], aspect_ratio),
+            'right': (0.5*(sidefrac-1)*side_shift_scale, 0.0, side_angle, side_resolution[0], side_resolution[1], aspect_ratio),
+            'left': (0.5*(1-sidefrac)*side_shift_scale, 0.0, side_angle, side_resolution[0], side_resolution[1], aspect_ratio),
             'front': (0.0, 0.0, fb_angle, fb_resolution[0], fb_resolution[1], aspect_ratio),
             'back': (0.0, 0.0, fb_angle, fb_resolution[0], fb_resolution[1], aspect_ratio)
         }
