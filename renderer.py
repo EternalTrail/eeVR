@@ -325,10 +325,11 @@ class Renderer:
 
         base_angle = (self.HFOV if eeVR.GetNoSidePlane() else pi/2)
 
-        margin = max(0.0, 0.5 * tan(base_angle/2 + eeVR.stitchMargin) - tan(base_angle/2))
+        margin = max(0.0, 0.5 * (tan(base_angle/2 + eeVR.stitchMargin) - tan(base_angle/2)))
         hmargin = 0.0 if self.no_side_images else margin
         vmargin = 0.0 if self.no_top_bottom_images else margin
         extrusion = max(0.0, 0.5 * tan(base_angle/2) - 0.5) if eeVR.GetNoSidePlane() else 0.0
+        print(f"stichAngle {eeVR.stitchMargin} margin:{margin} hmargin:{hmargin} vmargin:{vmargin} extrusion:{extrusion}")
         self.frag_shader = \
            (commdef % (fovfrac, sidefrac, tbfrac, self.HFOV, self.VFOV, hmargin, vmargin, extrusion))\
          + (dome % domemodes[int(self.domeMethod)] if self.is_dome else equi)\
