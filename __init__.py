@@ -22,13 +22,13 @@ bl_info = {
     "name": "eeVR",
     "description": "Render in different projections using Eevee engine",
     "author": "EternalTrail, SAMtak",
-    "version": (0, 3, 1),
+    "version": (0, 4, 0),
     "blender": (3, 0, 0),
     "location": "View3D > Tool Tab (Available when EEVEE or Workbench)",
     "warning": "This addon is still in early alpha, may break your blend file!",
     "wiki_url": "https://github.com/EternalTrail/eeVR",
     "tracker_url": "https://github.com/SAM-tak/eeVR/issues",
-    "support": "TESTING",
+    "support": "COMMUNITY",
     "category": "Render",
 }
 
@@ -176,9 +176,6 @@ class ToolPanel(Panel):
             col.prop(props, 'HFOV360')
         col.prop(props, 'VFOV')
         col.prop(props, 'stitchMargin')
-        col = layout.column()
-        col.prop(props, 'noSidePlane')
-        col.enabled = props.IsEnableNoSidePlane()
         if context.scene.render.use_multiview and props.GetHFOV() > radians(180):
             col = layout.column()
             col.label(icon='ERROR', text="eeVR cannot support stereo over 180° fov correctly.")
@@ -271,12 +268,6 @@ class Properties(bpy.types.PropertyGroup):
         description="Margin for Seam Blending in degrees",
     )
 
-    noSidePlane: bpy.props.BoolProperty(
-        name="No Side Plane",
-        default=False,
-        description="Not render side view. This is enable when HFOV under 160",
-    )
-
     cancel: bpy.props.BoolProperty(
         name="Cancel",
         default=True
@@ -299,12 +290,6 @@ class Properties(bpy.types.PropertyGroup):
 
     def GetVFOV(self) -> float:
         return self.snap_angle(self.VFOV)
-
-    def IsEnableNoSidePlane(self):
-        return self.GetHFOV() < radians(165)
-
-    def GetNoSidePlane(self) -> bool:
-        return self.IsEnableNoSidePlane() and self.noSidePlane
 
     @classmethod
     def register(cls):
