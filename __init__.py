@@ -294,16 +294,16 @@ class Properties(bpy.types.PropertyGroup):
             return radians(360)
         return src
 
-    def GetHFOV(self):
+    def GetHFOV(self) -> float:
         return self.snap_angle(self.HFOV180 if self.fovModeEnum == '180' else self.HFOV360)
 
-    def GetVFOV(self):
+    def GetVFOV(self) -> float:
         return self.snap_angle(self.VFOV)
 
     def IsEnableNoSidePlane(self):
         return self.GetHFOV() < radians(165)
 
-    def GetNoSidePlane(self):
+    def GetNoSidePlane(self) -> bool:
         return self.IsEnableNoSidePlane() and self.noSidePlane
 
     @classmethod

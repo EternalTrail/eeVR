@@ -7,21 +7,23 @@ import numpy as np
 from math import sin, cos, tan, ceil, degrees, pi
 from datetime import datetime
 from gpu_extras.batch import batch_for_shader
+from . import Properties
 
 commdef = '''
-#define PI       3.1415926535897932384626
-#define FOVFRAC  %f
-#define SIDEFRAC %f
-#define TBFRAC   %f
-#define HCLIP    %f
-#define VCLIP    %f
-#define HMARGIN  %f
-#define VMARGIN  %f
+#define PI        3.1415926535897932384626
+#define FOVFRAC   %f
+#define SIDEFRAC  %f
+#define TBFRAC    %f
+#define HCLIP     %f
+#define VCLIP     %f
+#define HMARGIN   %f
+#define VMARGIN   %f
+#define EXTRUSION %f
 
 const float INVSIDEFRAC = 1 / SIDEFRAC;
 const float INVTBFRAC = 1 / TBFRAC;
-const float HTEXSCALE = 1 / (1 + 2 * HMARGIN);
-const float VTEXSCALE = 1 / (1 + 2 * VMARGIN);
+const float HTEXSCALE = 1 / (1 + 2 * EXTRUSION + 2 * HMARGIN);
+const float VTEXSCALE = 1 / (1 + 2 * EXTRUSION + 2 * VMARGIN);
 const float HACTUALSIZE = 1 - 2 * HMARGIN;
 const float VACTUALSIZE = 1 - 2 * VMARGIN;
 
@@ -72,7 +74,7 @@ vec2 to_uv_bottom(vec3 pt)
 
 vec2 apply_margin(vec2 src)
 {
-    return tr(src, vec2(HMARGIN, VMARGIN), vec2(HTEXSCALE, VTEXSCALE));
+    return tr(src, vec2(HMARGIN + EXTRUSION, VMARGIN + EXTRUSION), vec2(HTEXSCALE, VTEXSCALE));
 }
 
 vec2 to_uv_front(vec3 pt)
@@ -276,7 +278,7 @@ class Renderer:
         if not bpy.data.is_saved:
             raise PermissionError("Save file before rendering")
         
-        eeVR = context.scene.eeVR
+        eeVR: Properties = context.scene.eeVR
 
         # Set internal variables for the class
         self.scene = context.scene
@@ -305,8 +307,8 @@ class Renderer:
         self.VFOV = eeVR.GetVFOV()
         self.FOV = pi if eeVR.fovModeEnum == '180' else 2 * pi if eeVR.fovModeEnum == '360' else max(self.HFOV, self.VFOV)
         self.no_back_image = (self.HFOV <= 3*pi/2)
-        self.no_side_images = (self.HFOV <= pi/2)
-        self.no_top_bottom_images = (self.VFOV <= pi/2)
+        self.no_side_images = eeVR.GetNoSidePlane() or (self.HFOV <= pi/2)
+        self.no_top_bottom_images = (self.VFOV <= (self.HFOV if eeVR.GetNoSidePlane() else pi/2))
         self.createdFiles = set()
         
         # Generate fragment shader code
@@ -318,17 +320,21 @@ class Renderer:
         else:
             sidefrac = sin(self.HFOV - pi/2) * 0.5
         tbfrac = max(sidefrac, sin(self.VFOV - pi/2) * 0.5)
-        margin = max(0.0, 0.5 * tan(pi/4 + eeVR.stitchMargin) - 0.5)
+
+        base_angle = (self.HFOV if eeVR.GetNoSidePlane() else pi/2)
+
+        margin = max(0.0, 0.5 * tan(base_angle/2 + eeVR.stitchMargin) - 0.5)
         hmargin = 0.0 if self.no_side_images else margin
         vmargin = 0.0 if self.no_top_bottom_images else margin
+        extrusion = max(0.0, 0.5 * tan(base_angle/2) - 0.5) if eeVR.GetNoSidePlane() else 0.0
         self.frag_shader = \
-           (commdef % (fovfrac, sidefrac, tbfrac, self.HFOV, self.VFOV, hmargin, vmargin))\
+           (commdef % (fovfrac, sidefrac, tbfrac, self.HFOV, self.VFOV, hmargin, vmargin, extrusion))\
          + (dome % domemodes[int(self.domeMethod)] if self.is_dome else equi)\
          + fetch_setup\
          + ('' if self.no_side_images else fetch_sides)\
          + ('' if self.no_top_bottom_images else fetch_top_bottom)\
          + ('' if self.no_back_image else (fetch_back % ((blend_seam_back_h if hmargin > 0.0 else '') + (blend_seam_back_v if vmargin > 0.0 else ''))))\
-         + (fetch_front % ((blend_seam_front_h if hmargin > 0.0 else '') + (blend_seam_front_v if vmargin > 0.0 else '')))\
+         + (fetch_front % ((blend_seam_front_h if hmargin > 0.0 or eeVR.GetNoSidePlane() else '') + (blend_seam_front_v if vmargin > 0.0 or eeVR.GetNoSidePlane() else '')))\
          + (blend_seam_sides if not self.no_side_images and vmargin > 0.0 else '')\
          + '}'
         
@@ -361,14 +367,15 @@ class Renderer:
         )
         aspect_ratio = base_resolution[0] / base_resolution[1]
         tb_resolution = self.trans_resolution(base_resolution, 1, tbfrac, 0, 0)
+        tb_angle = (pi - self.HFOV if eeVR.GetNoSidePlane() else pi/2)
         side_resolution = self.trans_resolution(base_resolution, sidefrac, 1, 0, vmargin)
         side_angle = pi/2 + ((2 * self.scene.eeVR.stitchMargin) if vmargin > 0.0 else 0.0)
         side_shift_scale = 1 / (1 + 2 * vmargin)
-        fb_resolution = self.trans_resolution(base_resolution, 1, 1, hmargin, vmargin)
-        fb_angle = pi/2 + ((2 * self.scene.eeVR.stitchMargin) if vmargin > 0.0 else 0.0)
+        fb_resolution = self.trans_resolution(base_resolution, 1, 1, extrusion+hmargin, extrusion+vmargin)
+        fb_angle = (self.HFOV if eeVR.GetNoSidePlane() else pi/2) + ((2 * self.scene.eeVR.stitchMargin) if vmargin > 0.0 else 0.0)
         self.camera_settings = {
-            'top': (0.0, 0.5*(tbfrac-1), pi/2, tb_resolution[0], tb_resolution[1], aspect_ratio),
-            'bottom': (0.0, 0.5*(1-tbfrac), pi/2, tb_resolution[0], tb_resolution[1], aspect_ratio),
+            'top': (0.0, 0.5*(tbfrac-1), tb_angle, tb_resolution[0], tb_resolution[1], aspect_ratio),
+            'bottom': (0.0, 0.5*(1-tbfrac), tb_angle, tb_resolution[0], tb_resolution[1], aspect_ratio),
             'right': (0.5*(sidefrac-1)*side_shift_scale, 0.0, side_angle, side_resolution[0], side_resolution[1], aspect_ratio),
             'left': (0.5*(1-sidefrac)*side_shift_scale, 0.0, side_angle, side_resolution[0], side_resolution[1], aspect_ratio),
             'front': (0.0, 0.0, fb_angle, fb_resolution[0], fb_resolution[1], aspect_ratio),
