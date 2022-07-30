@@ -9,11 +9,11 @@ from math import radians
 
 if "bpy" in locals():
     import importlib
-    importlib.reload(VRRenderer)
+    importlib.reload(renderer)
 else:
-    from . import VRRenderer
+    from . import renderer
 
-from .VRRenderer import Renderer
+from .renderer import Renderer
 
 import bpy
 from bpy.types import Context, Operator, Panel
@@ -283,7 +283,7 @@ class Properties(bpy.types.PropertyGroup):
     )
 
     @staticmethod
-    def snap_angle(src):
+    def snap_angle(src: float) -> float:
         if abs(src - radians(90)) < 0.000001:
             return radians(90)
         elif abs(src - radians(180)) < 0.000001:
@@ -300,7 +300,7 @@ class Properties(bpy.types.PropertyGroup):
     def GetVFOV(self) -> float:
         return self.snap_angle(self.VFOV)
 
-    def IsEnableNoSidePlane(self):
+    def IsEnableNoSidePlane(self) -> bool:
         return self.GetHFOV() < radians(165)
 
     def GetNoSidePlane(self) -> bool:
