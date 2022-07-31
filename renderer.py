@@ -372,7 +372,7 @@ class Renderer:
         aspect_ratio = base_resolution[0] / base_resolution[1]
         tb_resolution = self.trans_resolution(base_resolution, 1, tbfrac, 0, 0)
         side_resolution = self.trans_resolution(base_resolution, sidefrac, 1, 0, vmargin)
-        side_angle = pi/2 + ((2 * self.scene.eeVR.stitchMargin) if vmargin > 0.0 else 0.0)
+        side_angle = pi/2 + ((2 * self.stitchMargin) if vmargin > 0.0 else 0.0)
         side_shift_scale = 1 / (1 + 2 * vmargin)
         fb_resolution = self.trans_resolution(base_resolution, 1, 1, extrusion+hmargin, extrusion+vmargin)
         fb_angle = (self.HFOV if eeVR.GetNoSidePlane() else pi/2) + (2 * self.stitchMargin)
