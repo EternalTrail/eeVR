@@ -380,7 +380,7 @@ class Renderer:
             int(ceil(self.image_size[1] * (pi/2 / min(2*pi if self.is_dome else pi, self.FOV))))
         )
         aspect_ratio = base_resolution[0] / base_resolution[1]
-        tb_resolution = trans_resolution(base_resolution, 1, tbfrac, 0, -intrusion*tbfrac)
+        tb_resolution = trans_resolution(base_resolution, 1, tbfrac-intrusion, 0, 0)
         side_resolution = trans_resolution(base_resolution, sidefrac, 1, 0, vmargin)
         side_angle = pi/2 + ((2 * self.stitchMargin) if vmargin > 0.0 else 0.0)
         side_shift_scale = 1 / (1 + 2 * vmargin)
