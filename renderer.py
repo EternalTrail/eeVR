@@ -4,7 +4,7 @@ import time
 import gpu
 import bgl
 import numpy as np
-from math import sin, cos, tan, ceil, degrees, pi
+from math import sin, cos, tan, atan, ceil, degrees, pi
 from datetime import datetime
 from gpu_extras.batch import batch_for_shader
 from typing import TYPE_CHECKING
@@ -324,13 +324,13 @@ class Renderer:
             sidefrac = sin(self.HFOV - pi/2) * 0.5
         tbfrac = max(sidefrac, sin(self.VFOV - pi/2) * 0.5)
 
-        base_angle = (self.HFOV if eeVR.GetNoSidePlane() else pi/2)
+        base_angle = self.trfov(self.HFOV if eeVR.GetNoSidePlane() else pi/2)
 
         margin = max(0.0, 0.5 * (tan(base_angle/2 + self.stitchMargin) - tan(base_angle/2)))
         hmargin = 0.0 if self.no_side_images else margin
         vmargin = 0.0 if self.no_top_bottom_images else margin
         extrusion = max(0.0, 0.5 * tan(base_angle/2) - 0.5) if eeVR.GetNoSidePlane() else 0.0
-        print(f"stichAngle {eeVR.stitchMargin} margin:{margin} hmargin:{hmargin} vmargin:{vmargin} extrusion:{extrusion}")
+        print(f"stichAngle {self.stitchMargin} margin:{margin} hmargin:{hmargin} vmargin:{vmargin} extrusion:{extrusion}")
         self.frag_shader = \
            (commdef % (fovfrac, sidefrac, tbfrac, self.HFOV, self.VFOV, hmargin, vmargin, extrusion))\
          + (dome % domemodes[int(self.domeMethod)] if self.is_dome else equi)\
@@ -375,7 +375,7 @@ class Renderer:
         side_angle = pi/2 + ((2 * self.stitchMargin) if vmargin > 0.0 else 0.0)
         side_shift_scale = 1 / (1 + 2 * vmargin)
         fb_resolution = self.trans_resolution(base_resolution, 1, 1, extrusion+hmargin, extrusion+vmargin)
-        fb_angle = (self.HFOV if eeVR.GetNoSidePlane() else pi/2) + (2 * self.stitchMargin)
+        fb_angle = (base_angle if eeVR.GetNoSidePlane() else pi/2) + 2 * self.stitchMargin
         self.camera_settings = {
             'top': (0.0, 0.5*(tbfrac-1), pi/2, tb_resolution[0], tb_resolution[1], aspect_ratio),
             'bottom': (0.0, 0.5*(1-tbfrac), pi/2, tb_resolution[0], tb_resolution[1], aspect_ratio),
@@ -392,13 +392,14 @@ class Renderer:
         
         self.direction_offsets = self.find_direction_offsets()
 
-
     @staticmethod
     def trfov(src):
-        if src > pi/2:
-            return cos(src) * pi/2 + pi/2
+        if src < pi/2:
+            return 2*atan(2*src/pi)
+        elif src < 3*pi/2:
+            return -2*atan(1/(2*src/pi-2))
         else:
-            return sin(src) * pi/2
+            return -2*atan(2*src/pi-4)
 
 
     @staticmethod
@@ -574,8 +575,8 @@ class Renderer:
         if self.is_stereo:
             self.scene.render.image_settings.views_format = self.view_format
             self.scene.render.image_settings.stereo_3d_format.display_mode = self.stereo_mode
-        for filename in self.createdFiles:
-            os.remove(filename)
+        # for filename in self.createdFiles:
+        #     os.remove(filename)
         self.createdFiles.clear()
     
     
