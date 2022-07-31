@@ -272,6 +272,19 @@ void main() {
 '''
 
 
+def trfov(src):
+    if src < pi/2:
+        return 2*atan(2*src/pi)
+    elif src < 3*pi/2:
+        return pi+2*atan(2*src/pi-2)
+    else:
+        return 2*pi+2*atan(2*src/pi-4)
+
+
+def trans_resolution(src, hscale, vscale, hmargin, vmargin):
+    return int(ceil(src[0] * hscale + 2 * hmargin * src[0])), int(ceil(src[1] * vscale + 2 * vmargin * src[1]))
+
+
 class Renderer:
     
     def __init__(self, context, is_animation = False, folder = ''):
@@ -316,21 +329,16 @@ class Renderer:
         
         # Generate fragment shader code
         fovfrac = self.FOV / (2*pi)
-        if self.HFOV > 3*pi/2:
-            sidefrac = 1.0
-        elif self.HFOV > pi:
-            sidefrac = sin(self.HFOV - pi) * 0.5 + 0.5
-        else:
-            sidefrac = sin(self.HFOV - pi/2) * 0.5
-        tbfrac = max(sidefrac, sin(self.VFOV - pi/2) * 0.5)
-
-        base_angle = self.trfov(self.HFOV if eeVR.GetNoSidePlane() else pi/2)
+        sidefrac = max(0, min(1, (self.HFOV - pi/2) / pi))
+        tbfrac = max(sidefrac, max(0, min(1, (self.VFOV - pi/2) / pi)))
+        
+        base_angle = trfov(self.HFOV if eeVR.GetNoSidePlane() else pi/2)
 
         margin = max(0.0, 0.5 * (tan(base_angle/2 + self.stitchMargin) - tan(base_angle/2)))
         hmargin = 0.0 if self.no_side_images else margin
         vmargin = 0.0 if self.no_top_bottom_images else margin
         extrusion = max(0.0, 0.5 * tan(base_angle/2) - 0.5) if eeVR.GetNoSidePlane() else 0.0
-        print(f"stichAngle {self.stitchMargin} margin:{margin} hmargin:{hmargin} vmargin:{vmargin} extrusion:{extrusion}")
+        # print(f"stichAngle {self.stitchMargin} margin:{margin} hmargin:{hmargin} vmargin:{vmargin} extrusion:{extrusion}")
         self.frag_shader = \
            (commdef % (fovfrac, sidefrac, tbfrac, self.HFOV, self.VFOV, hmargin, vmargin, extrusion))\
          + (dome % domemodes[int(self.domeMethod)] if self.is_dome else equi)\
@@ -370,11 +378,11 @@ class Renderer:
             int(ceil(self.image_size[1] * (pi/2 / min(2*pi if self.is_dome else pi, self.FOV))))
         )
         aspect_ratio = base_resolution[0] / base_resolution[1]
-        tb_resolution = self.trans_resolution(base_resolution, 1, tbfrac, 0, 0)
-        side_resolution = self.trans_resolution(base_resolution, sidefrac, 1, 0, vmargin)
+        tb_resolution = trans_resolution(base_resolution, 1, tbfrac, 0, 0)
+        side_resolution = trans_resolution(base_resolution, sidefrac, 1, 0, vmargin)
         side_angle = pi/2 + ((2 * self.stitchMargin) if vmargin > 0.0 else 0.0)
         side_shift_scale = 1 / (1 + 2 * vmargin)
-        fb_resolution = self.trans_resolution(base_resolution, 1, 1, extrusion+hmargin, extrusion+vmargin)
+        fb_resolution = trans_resolution(base_resolution, 1, 1, extrusion+hmargin, extrusion+vmargin)
         fb_angle = (base_angle if eeVR.GetNoSidePlane() else pi/2) + 2 * self.stitchMargin
         self.camera_settings = {
             'top': (0.0, 0.5*(tbfrac-1), pi/2, tb_resolution[0], tb_resolution[1], aspect_ratio),
@@ -391,21 +399,7 @@ class Renderer:
             self.scene.render.image_settings.stereo_3d_format.display_mode = 'TOPBOTTOM'
         
         self.direction_offsets = self.find_direction_offsets()
-
-    @staticmethod
-    def trfov(src):
-        if src < pi/2:
-            return 2*atan(2*src/pi)
-        elif src < 3*pi/2:
-            return -2*atan(1/(2*src/pi-2))
-        else:
-            return -2*atan(2*src/pi-4)
-
-
-    @staticmethod
-    def trans_resolution(src, hscale, vscale, hmargin, vmargin):
-        return int(ceil(src[0] * hscale + 2 * hmargin * src[0])), int(ceil(src[1] * vscale + 2 * vmargin * src[1]))
-
+    
     
     def cubemap_to_panorama(self, imageList, outputName):
         
@@ -575,8 +569,8 @@ class Renderer:
         if self.is_stereo:
             self.scene.render.image_settings.views_format = self.view_format
             self.scene.render.image_settings.stereo_3d_format.display_mode = self.stereo_mode
-        # for filename in self.createdFiles:
-        #     os.remove(filename)
+        for filename in self.createdFiles:
+            os.remove(filename)
         self.createdFiles.clear()
     
     
