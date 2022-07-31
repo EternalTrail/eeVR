@@ -24,7 +24,7 @@ commdef = '''
 #define INTRUSION %f
 
 const float INVSIDEFRAC = 1 / SIDEFRAC;
-const float INVTBFRAC = 1 / (TBFRAC * (1 - 2 * INTRUSION));
+const float INVTBFRAC = 1 / (TBFRAC - TBFRAC*INTRUSION);
 const float HTEXSCALE = 1 / (1 + 2 * EXTRUSION + 2 * HMARGIN);
 const float VTEXSCALE = 1 / (1 + 2 * EXTRUSION + 2 * VMARGIN);
 const float HACTUALSIZE = 1 - 2 * HMARGIN;
@@ -67,12 +67,12 @@ vec2 to_uv_left(vec3 pt)
 
 vec2 to_uv_top(vec3 pt)
 {
-    return tr(to_uv(pt.x/pt.y, -pt.z/pt.y), vec2(0, -INTRUSION), vec2(1, INVTBFRAC));
+    return tr(to_uv(pt.x/pt.y, -pt.z/pt.y), vec2(0, -INTRUSION*TBFRAC), vec2(1, INVTBFRAC));
 }
 
 vec2 to_uv_bottom(vec3 pt)
 {
-    return tr(to_uv(-pt.x/pt.y, -pt.z/pt.y), vec2(0, TBFRAC - 1 + INTRUSION), vec2(1, INVTBFRAC));
+    return tr(to_uv(-pt.x/pt.y, -pt.z/pt.y), vec2(0, TBFRAC - 1 + INTRUSION*TBFRAC), vec2(1, INVTBFRAC));
 }
 
 vec2 apply_margin(vec2 src)
@@ -572,8 +572,8 @@ class Renderer:
         if self.is_stereo:
             self.scene.render.image_settings.views_format = self.view_format
             self.scene.render.image_settings.stereo_3d_format.display_mode = self.stereo_mode
-        # for filename in self.createdFiles:
-        #     os.remove(filename)
+        for filename in self.createdFiles:
+            os.remove(filename)
         self.createdFiles.clear()
     
     
