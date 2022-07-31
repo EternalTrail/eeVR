@@ -21,9 +21,10 @@ commdef = '''
 #define HMARGIN   %f
 #define VMARGIN   %f
 #define EXTRUSION %f
+#define INTRUSION %f
 
 const float INVSIDEFRAC = 1 / SIDEFRAC;
-const float INVTBFRAC = 1 / TBFRAC;
+const float INVTBFRAC = 1 / (TBFRAC * (1 - 2 * INTRUSION));
 const float HTEXSCALE = 1 / (1 + 2 * EXTRUSION + 2 * HMARGIN);
 const float VTEXSCALE = 1 / (1 + 2 * EXTRUSION + 2 * VMARGIN);
 const float HACTUALSIZE = 1 - 2 * HMARGIN;
@@ -66,12 +67,12 @@ vec2 to_uv_left(vec3 pt)
 
 vec2 to_uv_top(vec3 pt)
 {
-    return to_uv(pt.x/pt.y, -pt.z/pt.y) * vec2(1, INVTBFRAC);
+    return tr(to_uv(pt.x/pt.y, -pt.z/pt.y), vec2(0, -INTRUSION), vec2(1, INVTBFRAC));
 }
 
 vec2 to_uv_bottom(vec3 pt)
 {
-    return tr(to_uv(-pt.x/pt.y, -pt.z/pt.y), vec2(0, TBFRAC - 1), vec2(1, INVTBFRAC));
+    return tr(to_uv(-pt.x/pt.y, -pt.z/pt.y), vec2(0, TBFRAC - 1 + INTRUSION), vec2(1, INVTBFRAC));
 }
 
 vec2 apply_margin(vec2 src)
@@ -338,9 +339,10 @@ class Renderer:
         hmargin = 0.0 if self.no_side_images else margin
         vmargin = 0.0 if self.no_top_bottom_images else margin
         extrusion = max(0.0, 0.5 * tan(base_angle/2) - 0.5) if eeVR.GetNoSidePlane() else 0.0
-        # print(f"stichAngle {self.stitchMargin} margin:{margin} hmargin:{hmargin} vmargin:{vmargin} extrusion:{extrusion}")
+        intrusion = max(0.0, 0.5 - 0.5 * tan(pi/2-base_angle/2)) if eeVR.GetNoSidePlane() else 0.0
+        print(f"stichAngle {self.stitchMargin} margin:{margin} hmargin:{hmargin} vmargin:{vmargin} extrusion:{extrusion} intrusion:{intrusion}")
         self.frag_shader = \
-           (commdef % (fovfrac, sidefrac, tbfrac, self.HFOV, self.VFOV, hmargin, vmargin, extrusion))\
+           (commdef % (fovfrac, sidefrac, tbfrac, self.HFOV, self.VFOV, hmargin, vmargin, extrusion, intrusion))\
          + (dome % domemodes[int(self.domeMethod)] if self.is_dome else equi)\
          + fetch_setup\
          + ('' if self.no_side_images else fetch_sides)\
@@ -378,15 +380,16 @@ class Renderer:
             int(ceil(self.image_size[1] * (pi/2 / min(2*pi if self.is_dome else pi, self.FOV))))
         )
         aspect_ratio = base_resolution[0] / base_resolution[1]
-        tb_resolution = trans_resolution(base_resolution, 1, tbfrac, 0, 0)
+        tb_resolution = trans_resolution(base_resolution, 1, tbfrac, 0, -intrusion*tbfrac)
         side_resolution = trans_resolution(base_resolution, sidefrac, 1, 0, vmargin)
         side_angle = pi/2 + ((2 * self.stitchMargin) if vmargin > 0.0 else 0.0)
         side_shift_scale = 1 / (1 + 2 * vmargin)
         fb_resolution = trans_resolution(base_resolution, 1, 1, extrusion+hmargin, extrusion+vmargin)
         fb_angle = (base_angle if eeVR.GetNoSidePlane() else pi/2) + 2 * self.stitchMargin
+        print(f"d{base_resolution[1]*tbfrac} intrusionpix:{base_resolution[1]*intrusion}")
         self.camera_settings = {
-            'top': (0.0, 0.5*(tbfrac-1), pi/2, tb_resolution[0], tb_resolution[1], aspect_ratio),
-            'bottom': (0.0, 0.5*(1-tbfrac), pi/2, tb_resolution[0], tb_resolution[1], aspect_ratio),
+            'top': (0.0, 0.5*(tbfrac-1+intrusion), pi/2, tb_resolution[0], tb_resolution[1], aspect_ratio),
+            'bottom': (0.0, 0.5*(1-tbfrac-intrusion), pi/2, tb_resolution[0], tb_resolution[1], aspect_ratio),
             'right': (0.5*(sidefrac-1)*side_shift_scale, 0.0, side_angle, side_resolution[0], side_resolution[1], aspect_ratio),
             'left': (0.5*(1-sidefrac)*side_shift_scale, 0.0, side_angle, side_resolution[0], side_resolution[1], aspect_ratio),
             'front': (0.0, 0.0, fb_angle, fb_resolution[0], fb_resolution[1], aspect_ratio),
@@ -569,8 +572,8 @@ class Renderer:
         if self.is_stereo:
             self.scene.render.image_settings.views_format = self.view_format
             self.scene.render.image_settings.stereo_3d_format.display_mode = self.stereo_mode
-        for filename in self.createdFiles:
-            os.remove(filename)
+        # for filename in self.createdFiles:
+        #     os.remove(filename)
         self.createdFiles.clear()
     
     
