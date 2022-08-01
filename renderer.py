@@ -314,7 +314,7 @@ class Renderer:
         self.domeMethod = props.domeMethodEnum
         self.HFOV = props.GetHFOV()
         self.VFOV = props.GetVFOV()
-        self.FOV = pi if props.fovModeEnum == '180' else 2 * pi if props.fovModeEnum == '360' else max(self.HFOV, self.VFOV)
+        renderFOV = pi if props.fovModeEnum == '180' else 2 * pi if props.fovModeEnum == '360' else max(self.HFOV, self.VFOV)
         self.no_back_image = (self.HFOV <= 3*pi/2)
         self.no_side_images = props.GetNoSidePlane() or (self.HFOV <= pi/2)
         self.no_top_bottom_images = (self.VFOV <= (self.HFOV if props.GetNoSidePlane() else pi/2))
@@ -331,12 +331,12 @@ class Renderer:
         scale = self.resolution_percentage_origin / 100.0
         self.image_size = int(ceil(self.scene.render.resolution_x * scale)), int(ceil(self.scene.render.resolution_y * scale))
         base_resolution = (
-            int(ceil(self.image_size[0] * (pi/2 / self.FOV))),
-            int(ceil(self.image_size[1] * (pi/2 / min(2*pi if self.is_dome else pi, self.FOV))))
+            int(ceil(self.image_size[0] * (pi/2 / renderFOV))),
+            int(ceil(self.image_size[1] * (pi/2 / min(2*pi if self.is_dome else pi, renderFOV))))
         )
         
         # Generate fragment shader code
-        fovfrac = self.FOV / (2*pi)
+        fovfrac = renderFOV / (2*pi)
         sidefrac = max(0, min(1, (self.HFOV - pi/2) / pi))
         tbfrac = max(sidefrac, max(0, min(1, (self.VFOV - pi/2) / pi)))
         
