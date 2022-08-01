@@ -275,15 +275,6 @@ void main() {
 '''
 
 
-def trfov(src):
-    if src < pi/2:
-        return 2*atan(2*src/pi)
-    elif src < 3*pi/2:
-        return pi+2*atan(2*src/pi-2)
-    else:
-        return 2*pi+2*atan(2*src/pi-4)
-
-
 def trans_resolution(src, hscale, vscale, hmargin, vmargin):
     return int(ceil(src[0] * hscale + 2 * hmargin * src[0])), int(ceil(src[1] * vscale + 2 * vmargin * src[1]))
 
@@ -349,8 +340,8 @@ class Renderer:
         sidefrac = max(0, min(1, (self.HFOV - pi/2) / pi))
         tbfrac = max(sidefrac, max(0, min(1, (self.VFOV - pi/2) / pi)))
         
-        base_angle = trfov(self.HFOV if props.GetNoSidePlane() else pi/2)
-
+        base_angle = self.HFOV if props.GetNoSidePlane() else pi/2
+        
         margin = max(0.0, 0.5 * (tan(base_angle/2 + self.stitchMargin) - tan(base_angle/2)))
         extrusion = max(0.0, 0.5 * tan(base_angle/2) - 0.5) if props.GetNoSidePlane() else 0.0
         intrusion = max(0.0, 0.5 - 0.5 * tan(pi/2-base_angle/2)) if props.GetNoSidePlane() else 0.0
@@ -360,7 +351,7 @@ class Renderer:
         vmargin = 0.0 if self.no_top_bottom_images else margin
         # print(f"stichAngle {self.stitchMargin} margin:{margin} hmargin:{hmargin} vmargin:{vmargin} extrusion:{extrusion} intrusion:{intrusion}")
         # print(f"HTEXSCALE:{1 / (1 + 2 * extrusion + 2 * hmargin)} VTEXSCALE:{1 / (1 + 2 * extrusion + 2 * vmargin)}")
-        self.frag_shader = \
+        frag_shader = \
            (commdef % (fovfrac, sidefrac, tbfrac, self.HFOV, self.VFOV, hmargin, vmargin, extrusion, intrusion))\
          + (dome % domemodes[int(self.domeMethod)] if self.is_dome else equi)\
          + fetch_setup\
@@ -370,6 +361,7 @@ class Renderer:
          + (fetch_front % ((blend_seam_front_h if hmargin > 0.0 or props.GetNoSidePlane() else '') + (blend_seam_front_v if vmargin > 0.0 or props.GetNoSidePlane() else '')))\
          + (blend_seam_sides if not self.no_side_images and vmargin > 0.0 else '')\
          + '}'
+        self.shader = gpu.types.GPUShader(vertex_shader, frag_shader)
         
         # Set the image name to the current time
         self.start_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
@@ -423,9 +415,8 @@ class Renderer:
                   (1.0, -1.0),   # right, bottom
                   (1.0,  1.0)]   # right, top
         vertexIndices = [(0, 3, 1),(3, 0, 2)]
-        shader = gpu.types.GPUShader(vertex_shader, self.frag_shader)
         
-        batch = batch_for_shader(shader, 'TRIS', {
+        batch = batch_for_shader(self.shader, 'TRIS', {
             "aVertexPosition": pos,
             "aVertexTextureCoord": coords
         }, indices=vertexIndices)
@@ -447,7 +438,7 @@ class Renderer:
             bgl.glClearColor(0.0, 0.0, 0.0, 1.0)
             bgl.glClear(bgl.GL_COLOR_BUFFER_BIT)
 
-            shader.bind()
+            self.shader.bind()
             
             def bind_and_filter(tex, bindcode, image=None, imageNum=None):
                 bgl.glActiveTexture(tex)
@@ -458,7 +449,7 @@ class Renderer:
                 bgl.glTexParameteri(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_WRAP_T, bgl.GL_CLAMP_TO_EDGE)
                 if image!=None and imageNum!=None:
                     try:
-                        shader.uniform_int(image, imageNum)
+                        self.shader.uniform_int(image, imageNum)
                     except ValueError as err:
                         print(f"eeVR : WARING : {err}")
             
@@ -488,10 +479,10 @@ class Renderer:
             
             # Bind the resulting texture
             bind_and_filter(bgl.GL_TEXTURE6, offscreen.color_texture)
-            
+
             # Render the image
-            batch.draw(shader)
-            
+            batch.draw(self.shader)
+
             # Unload the textures
             for image in imageList:
                 image.gl_free()
@@ -674,8 +665,8 @@ class Renderer:
     def render_images(self):
         
         # Render the images for every direction
-        image_list_1 = []
-        image_list_2 = []
+        image_list_l = []
+        image_list_r = []
         
         directions = ['front']
         if not self.no_side_images:
@@ -688,11 +679,11 @@ class Renderer:
         self.direction_offsets = self.find_direction_offsets()
         for direction in reversed(directions): # I want the results of the front camera to remain in the render window... just that.
             self.set_camera_direction(direction)
-            img1, img2 = self.render_image(direction)
-            image_list_1.insert(0, img1)
-            image_list_2.insert(0, img2)
+            imgl, imgr = self.render_image(direction)
+            image_list_l.insert(0, imgl)
+            image_list_r.insert(0, imgr)
         
-        return image_list_1, image_list_2
+        return image_list_l, image_list_r
 
 
     def render_and_save(self):
@@ -709,29 +700,29 @@ class Renderer:
         start_time = time.time()
         # Convert the rendered images to equirectangular projection image and save it to the disk
         if self.is_stereo:
-            imageResult1 = self.cubemap_to_panorama(imageList, "Render Left")
-            imageResult2 = self.cubemap_to_panorama(imageList2, "Render Right")
+            leftImage = self.cubemap_to_panorama(imageList, "Render Left")
+            rightImage = self.cubemap_to_panorama(imageList2, "Render Right")
 
             # If it doesn't already exist, create an image object to store the resulting render
             if not image_name in bpy.data.images.keys():
-                imageResult = bpy.data.images.new(image_name, imageResult1.size[0], 2 * imageResult1.size[1])
+                imageResult = bpy.data.images.new(image_name, leftImage.size[0], 2 * leftImage.size[1])
             
             imageResult = bpy.data.images[image_name]
             if self.stereo_mode == 'SIDEBYSIDE':
-                imageResult.scale(2*imageResult1.size[0], imageResult1.size[1])
-                img2arr = np.empty((imageResult2.size[1], 4 * imageResult2.size[0]), dtype=np.float32)
-                imageResult2.pixels.foreach_get(img2arr.ravel())
-                img1arr = np.empty((imageResult1.size[1], 4 * imageResult1.size[0]), dtype=np.float32)
-                imageResult1.pixels.foreach_get(img1arr.ravel())
+                imageResult.scale(2*leftImage.size[0], leftImage.size[1])
+                img2arr = np.empty((rightImage.size[1], 4 * rightImage.size[0]), dtype=np.float32)
+                rightImage.pixels.foreach_get(img2arr.ravel())
+                img1arr = np.empty((leftImage.size[1], 4 * leftImage.size[0]), dtype=np.float32)
+                leftImage.pixels.foreach_get(img1arr.ravel())
                 imageResult.pixels.foreach_set(np.concatenate((img2arr, img1arr), axis=1).ravel())
             else:
-                imageResult.scale(imageResult1.size[0], 2*imageResult1.size[1])
-                buff = np.empty((imageResult1.size[0] * 2 * imageResult1.size[1] * 4,), dtype=np.float32)
-                imageResult2.pixels.foreach_get(buff[:buff.shape[0]//2].ravel())
-                imageResult1.pixels.foreach_get(buff[buff.shape[0]//2:].ravel())
+                imageResult.scale(leftImage.size[0], 2*leftImage.size[1])
+                buff = np.empty((leftImage.size[0] * 2 * leftImage.size[1] * 4,), dtype=np.float32)
+                rightImage.pixels.foreach_get(buff[:buff.shape[0]//2].ravel())
+                leftImage.pixels.foreach_get(buff[buff.shape[0]//2:].ravel())
                 imageResult.pixels.foreach_set(buff.ravel())
-            bpy.data.images.remove(imageResult1)
-            bpy.data.images.remove(imageResult2)
+            bpy.data.images.remove(leftImage)
+            bpy.data.images.remove(rightImage)
 
         else:
             imageResult = self.cubemap_to_panorama(imageList, "RenderResult")
