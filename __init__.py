@@ -274,7 +274,7 @@ class Properties(bpy.types.PropertyGroup):
     noSidePlane: bpy.props.BoolProperty(
         name="No Side Plane",
         default=False,
-        description="Not render side view. This is enable when HFOV under 160",
+        description="Not render side views. This is enable when Horizontal FOV under 160°",
     )
 
     cancel: bpy.props.BoolProperty(

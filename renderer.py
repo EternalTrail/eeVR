@@ -24,7 +24,7 @@ commdef = '''
 #define INTRUSION %f
 
 const float INVSIDEFRAC = 1 / SIDEFRAC;
-const float INVTBFRAC = 1 / (TBFRAC - TBFRAC*INTRUSION);
+const float TBHTEXSCALE = 1 / (TBFRAC - INTRUSION);
 const float HTEXSCALE = 1 / (1 + 2 * EXTRUSION + 2 * HMARGIN);
 const float VTEXSCALE = 1 / (1 + 2 * EXTRUSION + 2 * VMARGIN);
 const float HACTUALSIZE = 1 - 2 * HMARGIN;
@@ -67,12 +67,12 @@ vec2 to_uv_left(vec3 pt)
 
 vec2 to_uv_top(vec3 pt)
 {
-    return tr(to_uv(pt.x/pt.y, -pt.z/pt.y), vec2(0, -INTRUSION*TBFRAC), vec2(1, INVTBFRAC));
+    return tr(to_uv(pt.x/pt.y, -pt.z/pt.y), vec2(0, -INTRUSION), vec2(1, TBHTEXSCALE));
 }
 
 vec2 to_uv_bottom(vec3 pt)
 {
-    return tr(to_uv(-pt.x/pt.y, -pt.z/pt.y), vec2(0, TBFRAC - 1 + INTRUSION*TBFRAC), vec2(1, INVTBFRAC));
+    return tr(to_uv(-pt.x/pt.y, -pt.z/pt.y), vec2(0, TBFRAC - 1), vec2(1, TBHTEXSCALE));
 }
 
 vec2 apply_margin(vec2 src)
@@ -294,7 +294,7 @@ class Renderer:
         if not bpy.data.is_saved:
             raise PermissionError("Save file before rendering")
         
-        eeVR: Properties = context.scene.eeVR
+        props: Properties = context.scene.eeVR
 
         # Set internal variables for the class
         self.scene = context.scene
@@ -317,29 +317,45 @@ class Renderer:
         self.path = bpy.path.abspath("//")
         self.is_stereo = context.scene.render.use_multiview
         self.is_animation = is_animation
-        self.is_dome = (eeVR.renderModeEnum == 'DOME')
-        self.domeMethod = eeVR.domeMethodEnum
-        self.HFOV = eeVR.GetHFOV()
-        self.VFOV = eeVR.GetVFOV()
-        self.FOV = pi if eeVR.fovModeEnum == '180' else 2 * pi if eeVR.fovModeEnum == '360' else max(self.HFOV, self.VFOV)
+        self.is_dome = (props.renderModeEnum == 'DOME')
+        self.domeMethod = props.domeMethodEnum
+        self.HFOV = props.GetHFOV()
+        self.VFOV = props.GetVFOV()
+        self.FOV = pi if props.fovModeEnum == '180' else 2 * pi if props.fovModeEnum == '360' else max(self.HFOV, self.VFOV)
         self.no_back_image = (self.HFOV <= 3*pi/2)
-        self.no_side_images = eeVR.GetNoSidePlane() or (self.HFOV <= pi/2)
-        self.no_top_bottom_images = (self.VFOV <= (self.HFOV if eeVR.GetNoSidePlane() else pi/2))
-        self.stitchMargin = 0.0 if self.no_side_images and self.no_top_bottom_images else eeVR.stitchMargin
+        self.no_side_images = props.GetNoSidePlane() or (self.HFOV <= pi/2)
+        self.no_top_bottom_images = (self.VFOV <= (self.HFOV if props.GetNoSidePlane() else pi/2))
+        self.stitchMargin = 0.0 if self.no_side_images and self.no_top_bottom_images else props.stitchMargin
         self.createdFiles = set()
+        
+        # Calcurate dimension        
+        self.resolution_x_origin = self.scene.render.resolution_x
+        self.resolution_y_origin = self.scene.render.resolution_y
+        self.pixel_aspect_x_origin = self.scene.render.pixel_aspect_x
+        self.pixel_aspect_y_origin = self.scene.render.pixel_aspect_y
+        self.resolution_percentage_origin = self.scene.render.resolution_percentage
+
+        scale = self.resolution_percentage_origin / 100.0
+        self.image_size = int(ceil(self.scene.render.resolution_x * scale)), int(ceil(self.scene.render.resolution_y * scale))
+        base_resolution = (
+            int(ceil(self.image_size[0] * (pi/2 / self.FOV))),
+            int(ceil(self.image_size[1] * (pi/2 / min(2*pi if self.is_dome else pi, self.FOV))))
+        )
         
         # Generate fragment shader code
         fovfrac = self.FOV / (2*pi)
         sidefrac = max(0, min(1, (self.HFOV - pi/2) / pi))
         tbfrac = max(sidefrac, max(0, min(1, (self.VFOV - pi/2) / pi)))
         
-        base_angle = trfov(self.HFOV if eeVR.GetNoSidePlane() else pi/2)
+        base_angle = trfov(self.HFOV if props.GetNoSidePlane() else pi/2)
 
         margin = max(0.0, 0.5 * (tan(base_angle/2 + self.stitchMargin) - tan(base_angle/2)))
+        extrusion = max(0.0, 0.5 * tan(base_angle/2) - 0.5) if props.GetNoSidePlane() else 0.0
+        intrusion = max(0.0, 0.5 - 0.5 * tan(pi/2-base_angle/2)) if props.GetNoSidePlane() else 0.0
+        if tbfrac - intrusion <= 0.0 or base_resolution[1]*(tbfrac-intrusion) < 1.0:
+            self.no_top_bottom_images = True
         hmargin = 0.0 if self.no_side_images else margin
         vmargin = 0.0 if self.no_top_bottom_images else margin
-        extrusion = max(0.0, 0.5 * tan(base_angle/2) - 0.5) if eeVR.GetNoSidePlane() else 0.0
-        intrusion = max(0.0, 0.5 - 0.5 * tan(pi/2-base_angle/2)) if eeVR.GetNoSidePlane() else 0.0
         print(f"stichAngle {self.stitchMargin} margin:{margin} hmargin:{hmargin} vmargin:{vmargin} extrusion:{extrusion} intrusion:{intrusion}")
         self.frag_shader = \
            (commdef % (fovfrac, sidefrac, tbfrac, self.HFOV, self.VFOV, hmargin, vmargin, extrusion, intrusion))\
@@ -348,7 +364,7 @@ class Renderer:
          + ('' if self.no_side_images else fetch_sides)\
          + ('' if self.no_top_bottom_images else fetch_top_bottom)\
          + ('' if self.no_back_image else (fetch_back % ((blend_seam_back_h if hmargin > 0.0 else '') + (blend_seam_back_v if vmargin > 0.0 else ''))))\
-         + (fetch_front % ((blend_seam_front_h if hmargin > 0.0 or eeVR.GetNoSidePlane() else '') + (blend_seam_front_v if vmargin > 0.0 or eeVR.GetNoSidePlane() else '')))\
+         + (fetch_front % ((blend_seam_front_h if hmargin > 0.0 or props.GetNoSidePlane() else '') + (blend_seam_front_v if vmargin > 0.0 or props.GetNoSidePlane() else '')))\
          + (blend_seam_sides if not self.no_side_images and vmargin > 0.0 else '')\
          + '}'
         
@@ -366,26 +382,15 @@ class Renderer:
         self.camera.data.type = 'PANO'
         self.camera.data.stereo.convergence_mode = 'PARALLEL'
         self.camera.data.stereo.pivot = 'CENTER'
-        
-        self.resolution_x_origin = self.scene.render.resolution_x
-        self.resolution_y_origin = self.scene.render.resolution_y
-        self.pixel_aspect_x_origin = self.scene.render.pixel_aspect_x
-        self.pixel_aspect_y_origin = self.scene.render.pixel_aspect_y
-        self.resolution_percentage_origin = self.scene.render.resolution_percentage
-        
-        scale = self.resolution_percentage_origin / 100.0
-        self.image_size = int(ceil(self.scene.render.resolution_x * scale)), int(ceil(self.scene.render.resolution_y * scale))
-        base_resolution = (
-            int(ceil(self.image_size[0] * (pi/2 / self.FOV))),
-            int(ceil(self.image_size[1] * (pi/2 / min(2*pi if self.is_dome else pi, self.FOV))))
-        )
+
+        # setup render targets information
         aspect_ratio = base_resolution[0] / base_resolution[1]
         tb_resolution = trans_resolution(base_resolution, 1, tbfrac-intrusion, 0, 0)
         side_resolution = trans_resolution(base_resolution, sidefrac, 1, 0, vmargin)
         side_angle = pi/2 + ((2 * self.stitchMargin) if vmargin > 0.0 else 0.0)
         side_shift_scale = 1 / (1 + 2 * vmargin)
         fb_resolution = trans_resolution(base_resolution, 1, 1, extrusion+hmargin, extrusion+vmargin)
-        fb_angle = (base_angle if eeVR.GetNoSidePlane() else pi/2) + 2 * self.stitchMargin
+        fb_angle = (base_angle if props.GetNoSidePlane() else pi/2) + 2 * self.stitchMargin
         print(f"d{base_resolution[1]*tbfrac} intrusionpix:{base_resolution[1]*intrusion}")
         self.camera_settings = {
             'top': (0.0, 0.5*(tbfrac-1+intrusion), pi/2, tb_resolution[0], tb_resolution[1], aspect_ratio),
