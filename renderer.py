@@ -27,8 +27,8 @@ const float INVSIDEFRAC = 1 / SIDEFRAC;
 const float TBHTEXSCALE = 1 / (TBFRAC - INTRUSION);
 const float HTEXSCALE = 1 / (1 + 2 * EXTRUSION + 2 * HMARGIN);
 const float VTEXSCALE = 1 / (1 + 2 * EXTRUSION + 2 * VMARGIN);
-const float HACTUALSIZE = 1 - 2 * HMARGIN;
-const float VACTUALSIZE = 1 - 2 * VMARGIN;
+const float ACTUALHMARGIN = HMARGIN * HTEXSCALE;
+const float ACTUALVMARGIN = VMARGIN * VTEXSCALE;
 
 vec2 tr(vec2 src, vec2 offset, vec2 scale)
 {
@@ -203,40 +203,42 @@ fetch_front = '''
 
 blend_seam_front_h = '''
         {
-            float alpha = front * lor * right * smoothstep(1.0, 0.0, clamp((uv.x - HACTUALSIZE - HMARGIN) / HMARGIN, 0.0, 1.0));
+            float in_range = step(0, uv.x) * (1 - step(1, uv.x));
+            float alpha = in_range * front * lor * right * smoothstep(1.0, 0.0, clamp((uv.x - 1 + ACTUALHMARGIN) / ACTUALHMARGIN, 0.0, 1.0));
             fragColor = mix(fragColor, texture(cubeFrontImage, uv), alpha);
             
-            alpha = front * lor * (1 - right) * smoothstep(0.0, 1.0, clamp(uv.x / HMARGIN, 0.0, 1.0));
+            alpha = in_range * front * lor * (1 - right) * smoothstep(0.0, 1.0, clamp(uv.x / ACTUALHMARGIN, 0.0, 1.0));
             fragColor = mix(fragColor, texture(cubeFrontImage, uv), alpha);
         }
 '''
 
 blend_seam_front_v = '''
         {
-            float alpha = front * tob * up * smoothstep(1.0, 0.0, clamp((uv.y - VACTUALSIZE - VMARGIN) / VMARGIN, 0.0, 1.0));
+            float in_range = step(0, uv.y) * (1 - step(1, uv.y));
+            float alpha = in_range * front * tob * up * smoothstep(1.0, 0.0, clamp((uv.y - 1 + ACTUALVMARGIN) / ACTUALVMARGIN, 0.0, 1.0));
             fragColor = mix(fragColor, texture(cubeFrontImage, uv), alpha);
 
-            alpha = front * tob * (1 - up) * smoothstep(0.0, 1.0, clamp(uv.y / VMARGIN, 0.0, 1.0));
+            alpha = in_range * front * tob * (1 - up) * smoothstep(0.0, 1.0, clamp(uv.y / ACTUALVMARGIN, 0.0, 1.0));
             fragColor = mix(fragColor, texture(cubeFrontImage, uv), alpha);
         }
 '''
 
 blend_seam_back_h = '''
         {
-            float alpha = (1 - front) * lor * right * smoothstep(1.0, 0.0, clamp((1.0 - uv.x - HACTUALSIZE - HMARGIN) / HMARGIN, 0.0, 1.0));
+            float alpha = (1 - front) * lor * right * smoothstep(1.0, 0.0, clamp((1.0 - uv.x - 1 + ACTUALHMARGIN) / ACTUALHMARGIN, 0.0, 1.0));
             fragColor = mix(fragColor, texture(cubeBackImage, uv), alpha);
             
-            alpha = (1 - front) * lor * (1 - right) * smoothstep(0.0, 1.0, clamp((1.0 - uv.x) / HMARGIN, 0.0, 1.0));
+            alpha = (1 - front) * lor * (1 - right) * smoothstep(0.0, 1.0, clamp((1.0 - uv.x) / ACTUALHMARGIN, 0.0, 1.0));
             fragColor = mix(fragColor, texture(cubeBackImage, uv), alpha);
         }
 '''
 
 blend_seam_back_v = '''
         {
-            float alpha = (1 - front) * tob * up * smoothstep(1.0, 0.0, clamp((uv.y - VACTUALSIZE - VMARGIN) / VMARGIN, 0.0, 1.0));
+            float alpha = (1 - front) * tob * up * smoothstep(1.0, 0.0, clamp((uv.y - 1 + ACTUALVMARGIN) / ACTUALVMARGIN, 0.0, 1.0));
             fragColor = mix(fragColor, texture(cubeBackImage, uv), alpha);
 
-            alpha = (1 - front) * tob * (1 - up) * smoothstep(0.0, 1.0, clamp(uv.y / VMARGIN, 0.0, 1.0));
+            alpha = (1 - front) * tob * (1 - up) * smoothstep(0.0, 1.0, clamp(uv.y / ACTUALVMARGIN, 0.0, 1.0));
             fragColor = mix(fragColor, texture(cubeBackImage, uv), alpha);
         }
 '''
@@ -245,16 +247,16 @@ blend_seam_sides = '''
     {
         float range = over45 * (1 - over135);
         
-        float alpha = range * right * tob * up * smoothstep(1.0, 0.0, clamp((right_uv.y - VACTUALSIZE - VMARGIN) / VMARGIN, 0.0, 1.0));
+        float alpha = range * right * tob * up * smoothstep(1.0, 0.0, clamp((right_uv.y - 1 + ACTUALVMARGIN) / ACTUALVMARGIN, 0.0, 1.0));
         fragColor = mix(fragColor, texture(cubeRightImage, right_uv), alpha);
 
-        alpha = range * right * tob * (1 - up) * smoothstep(0.0, 1.0, clamp(right_uv.y / VMARGIN, 0.0, 1.0));
+        alpha = range * right * tob * (1 - up) * smoothstep(0.0, 1.0, clamp(right_uv.y / ACTUALVMARGIN, 0.0, 1.0));
         fragColor = mix(fragColor, texture(cubeRightImage, right_uv), alpha);
 
-        alpha = range * (1 - right) * tob * up * smoothstep(1.0, 0.0, clamp((left_uv.y - VACTUALSIZE - VMARGIN) / VMARGIN, 0.0, 1.0));
+        alpha = range * (1 - right) * tob * up * smoothstep(1.0, 0.0, clamp((left_uv.y - 1 + ACTUALVMARGIN) / ACTUALVMARGIN, 0.0, 1.0));
         fragColor = mix(fragColor, texture(cubeLeftImage, left_uv), alpha);
 
-        alpha = range * (1 - right) * tob * (1 - up) * smoothstep(0.0, 1.0, clamp(left_uv.y / VMARGIN, 0.0, 1.0));
+        alpha = range * (1 - right) * tob * (1 - up) * smoothstep(0.0, 1.0, clamp(left_uv.y / ACTUALVMARGIN, 0.0, 1.0));
         fragColor = mix(fragColor, texture(cubeLeftImage, left_uv), alpha);
     }
 '''
@@ -356,7 +358,8 @@ class Renderer:
             self.no_top_bottom_images = True
         hmargin = 0.0 if self.no_side_images else margin
         vmargin = 0.0 if self.no_top_bottom_images else margin
-        print(f"stichAngle {self.stitchMargin} margin:{margin} hmargin:{hmargin} vmargin:{vmargin} extrusion:{extrusion} intrusion:{intrusion}")
+        # print(f"stichAngle {self.stitchMargin} margin:{margin} hmargin:{hmargin} vmargin:{vmargin} extrusion:{extrusion} intrusion:{intrusion}")
+        # print(f"HTEXSCALE:{1 / (1 + 2 * extrusion + 2 * hmargin)} VTEXSCALE:{1 / (1 + 2 * extrusion + 2 * vmargin)}")
         self.frag_shader = \
            (commdef % (fovfrac, sidefrac, tbfrac, self.HFOV, self.VFOV, hmargin, vmargin, extrusion, intrusion))\
          + (dome % domemodes[int(self.domeMethod)] if self.is_dome else equi)\
@@ -391,7 +394,6 @@ class Renderer:
         side_shift_scale = 1 / (1 + 2 * vmargin)
         fb_resolution = trans_resolution(base_resolution, 1, 1, extrusion+hmargin, extrusion+vmargin)
         fb_angle = (base_angle if props.GetNoSidePlane() else pi/2) + 2 * self.stitchMargin
-        print(f"d{base_resolution[1]*tbfrac} intrusionpix:{base_resolution[1]*intrusion}")
         self.camera_settings = {
             'top': (0.0, 0.5*(tbfrac-1+intrusion), pi/2, tb_resolution[0], tb_resolution[1], aspect_ratio),
             'bottom': (0.0, 0.5*(1-tbfrac-intrusion), pi/2, tb_resolution[0], tb_resolution[1], aspect_ratio),
