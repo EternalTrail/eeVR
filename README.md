@@ -6,6 +6,8 @@ Blender addon to render 360° and 180° images and videos in eevee engine with s
 
 You will need to get [**Blender 3.x**](https://www.blender.org), install it, download the zip file from this GitHub, load the addon into Blender by installing the zip file in Blender Preferences > Add-ons > Install, search for "eeVR" under the Community tab and click the checkbox to enable it. A tool panel will appear in the 3D Viewport's **Tool tab**, FOV value adjustment, and buttons for rendering stills and animations. **The rendered images/image sequences will be stored in the same directory as the .blend file**.
 
+**NOTE** : The eeVR panel appears only when the render engine is EEVEE.
+
 ![Tool Panel](img/tools-01.jpg "Tool Panel") ![Tool Panel](img/tools-02.jpg "Tool Panel")
 
 ### Stitch Margin
@@ -19,6 +21,12 @@ Stitch Margin = 5°
 Final Image
 
 ![Final Image](img/finalimage.jpg "Final Image")
+
+### No Side Plane
+
+Generates panorama image **without rendering side views**.
+
+It is neccesary Horizontal FOV is under 160°.
 
 ## License
 
