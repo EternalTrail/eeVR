@@ -28,6 +28,8 @@ Generates panorama image **without rendering side views**.
 
 It is neccesary Horizontal FOV is under 160°.
 
+If you set same angle for Horizontal FOV and Vertical FOV both, eeVR makes panorama image from front render image only.
+
 ## License
 
 This project is licensed under the GNU General Public License v3.0 - see the [LICENSE.md](LICENSE.md) file for details.
