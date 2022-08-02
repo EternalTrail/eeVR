@@ -310,15 +310,14 @@ class Renderer:
         self.path = bpy.path.abspath("//")
         self.is_stereo = context.scene.render.use_multiview
         self.is_animation = is_animation
-        self.is_dome = (props.renderModeEnum == 'DOME')
-        self.domeMethod = props.domeMethodEnum
-        self.HFOV = props.GetHFOV()
-        self.VFOV = props.GetVFOV()
-        renderFOV = pi if props.fovModeEnum == '180' else 2 * pi if props.fovModeEnum == '360' else max(self.HFOV, self.VFOV)
-        self.no_back_image = (self.HFOV <= 3*pi/2)
-        self.no_side_images = props.GetNoSidePlane() or (self.HFOV <= pi/2)
-        self.no_top_bottom_images = (self.VFOV <= (self.HFOV if props.GetNoSidePlane() else pi/2))
-        self.stitchMargin = 0.0 if self.no_side_images and self.no_top_bottom_images else props.stitchMargin
+        is_dome = (props.renderModeEnum == 'DOME')
+        no_side_plane = props.GetNoSidePlane()
+        h_fov = props.GetHFOV()
+        v_fov = props.GetVFOV()
+        render_fov = pi if props.fovModeEnum == '180' else 2 * pi if props.fovModeEnum == '360' else max(h_fov, v_fov)
+        self.no_back_image = (h_fov <= 3*pi/2)
+        self.no_side_images = no_side_plane or (h_fov <= pi/2)
+        self.no_top_bottom_images = (v_fov <= (h_fov if no_side_plane else pi/2))
         self.createdFiles = set()
         
         # Calcurate dimension        
@@ -331,34 +330,35 @@ class Renderer:
         scale = self.resolution_percentage_origin / 100.0
         self.image_size = int(ceil(self.scene.render.resolution_x * scale)), int(ceil(self.scene.render.resolution_y * scale))
         base_resolution = (
-            int(ceil(self.image_size[0] * (pi/2 / renderFOV))),
-            int(ceil(self.image_size[1] * (pi/2 / min(2*pi if self.is_dome else pi, renderFOV))))
+            int(ceil(self.image_size[0] * (pi/2 / render_fov))),
+            int(ceil(self.image_size[1] * (pi/2 / min(2*pi if is_dome else pi, render_fov))))
         )
         
         # Generate fragment shader code
-        fovfrac = renderFOV / (2*pi)
-        sidefrac = max(0, min(1, (self.HFOV - pi/2) / pi))
-        tbfrac = max(sidefrac, max(0, min(1, (self.VFOV - pi/2) / pi)))
+        fovfrac = render_fov / (2*pi)
+        sidefrac = max(0, min(1, (h_fov - pi/2) / pi))
+        tbfrac = max(sidefrac, max(0, min(1, (v_fov - pi/2) / pi)))
         
-        base_angle = self.HFOV if props.GetNoSidePlane() else pi/2
+        base_angle = h_fov if no_side_plane else pi/2
         
-        margin = max(0.0, 0.5 * (tan(base_angle/2 + self.stitchMargin) - tan(base_angle/2)))
-        extrusion = max(0.0, 0.5 * tan(base_angle/2) - 0.5) if props.GetNoSidePlane() else 0.0
-        intrusion = max(0.0, 0.5 - 0.5 * tan(pi/2-base_angle/2)) if props.GetNoSidePlane() else 0.0
+        stitch_margin = 0.0 if self.no_side_images and self.no_top_bottom_images else props.stitchMargin
+        margin = max(0.0, 0.5 * (tan(base_angle/2 + stitch_margin) - tan(base_angle/2)))
+        extrusion = max(0.0, 0.5 * tan(base_angle/2) - 0.5) if no_side_plane else 0.0
+        intrusion = max(0.0, 0.5 - 0.5 * tan(pi/2-base_angle/2)) if no_side_plane else 0.0
         if tbfrac - intrusion <= 0.0 or base_resolution[1]*(tbfrac-intrusion) < 1.0:
             self.no_top_bottom_images = True
         hmargin = 0.0 if self.no_side_images else margin
         vmargin = 0.0 if self.no_top_bottom_images else margin
-        # print(f"stichAngle {self.stitchMargin} margin:{margin} hmargin:{hmargin} vmargin:{vmargin} extrusion:{extrusion} intrusion:{intrusion}")
+        # print(f"stichAngle {stitch_margin} margin:{margin} hmargin:{hmargin} vmargin:{vmargin} extrusion:{extrusion} intrusion:{intrusion}")
         # print(f"HTEXSCALE:{1 / (1 + 2 * extrusion + 2 * hmargin)} VTEXSCALE:{1 / (1 + 2 * extrusion + 2 * vmargin)}")
         frag_shader = \
-           (commdef % (fovfrac, sidefrac, tbfrac, self.HFOV, self.VFOV, hmargin, vmargin, extrusion, intrusion))\
-         + (dome % domemodes[int(self.domeMethod)] if self.is_dome else equi)\
+           (commdef % (fovfrac, sidefrac, tbfrac, h_fov, v_fov, hmargin, vmargin, extrusion, intrusion))\
+         + (dome % domemodes[int(props.domeMethodEnum)] if is_dome else equi)\
          + fetch_setup\
          + ('' if self.no_side_images else fetch_sides)\
          + ('' if self.no_top_bottom_images else fetch_top_bottom)\
          + ('' if self.no_back_image else (fetch_back % ((blend_seam_back_h if hmargin > 0.0 else '') + (blend_seam_back_v if vmargin > 0.0 else ''))))\
-         + (fetch_front % ((blend_seam_front_h if hmargin > 0.0 or props.GetNoSidePlane() else '') + (blend_seam_front_v if vmargin > 0.0 or props.GetNoSidePlane() else '')))\
+         + (fetch_front % ((blend_seam_front_h if hmargin > 0.0 or no_side_plane else '') + (blend_seam_front_v if vmargin > 0.0 or no_side_plane else '')))\
          + (blend_seam_sides if not self.no_side_images and vmargin > 0.0 else '')\
          + '}'
         self.shader = gpu.types.GPUShader(vertex_shader, frag_shader)
@@ -382,10 +382,10 @@ class Renderer:
         aspect_ratio = base_resolution[0] / base_resolution[1]
         tb_resolution = trans_resolution(base_resolution, 1, tbfrac-intrusion, 0, 0)
         side_resolution = trans_resolution(base_resolution, sidefrac, 1, 0, vmargin)
-        side_angle = pi/2 + ((2 * self.stitchMargin) if vmargin > 0.0 else 0.0)
+        side_angle = pi/2 + ((2 * stitch_margin) if vmargin > 0.0 else 0.0)
         side_shift_scale = 1 / (1 + 2 * vmargin)
         fb_resolution = trans_resolution(base_resolution, 1, 1, extrusion+hmargin, extrusion+vmargin)
-        fb_angle = (base_angle if props.GetNoSidePlane() else pi/2) + 2 * self.stitchMargin
+        fb_angle = (base_angle if no_side_plane else pi/2) + 2 * stitch_margin
         self.camera_settings = {
             'top': (0.0, 0.5*(tbfrac-1+intrusion), pi/2, tb_resolution[0], tb_resolution[1], aspect_ratio),
             'bottom': (0.0, 0.5*(1-tbfrac-intrusion), pi/2, tb_resolution[0], tb_resolution[1], aspect_ratio),
