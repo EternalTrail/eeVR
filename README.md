@@ -46,7 +46,3 @@ This project is licensed under the GNU General Public License v3.0 - see the [LI
 ## Acknowledgments
 
 - The image conversion OpenGL shader was originally created by [Xyene](https://github.com/Xyene) and modified for use in Blender so thank you.
-
-### Original Founder
-
-[EternalTrail](https://github.com/EternalTrail)
