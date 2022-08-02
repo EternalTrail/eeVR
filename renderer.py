@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from . import Properties
 
+# Define parts of fragment shader 
 commdef = '''
 #define PI        3.1415926535897932384626
 #define FOVFRAC   %f
