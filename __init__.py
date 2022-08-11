@@ -21,13 +21,14 @@ from bpy.types import Context, Operator, Panel
 bl_info = {
     "name": "eeVR",
     "description": "Render in different projections using Eevee engine",
-    "author": "EternalTrail, SAMtak",
+    "author": "EternalTrail",
     "version": (0, 5, 2),
-    "blender": (3, 0, 0),
+    "blender": (2, 82, 7),
     "location": "View3D > Tool Tab (Available when EEVEE or Workbench)",
+    "warning": "This addon is still in early alpha, may break your blend file!",
     "wiki_url": "https://github.com/EternalTrail/eeVR",
     "tracker_url": "https://github.com/SAM-tak/eeVR/issues",
-    "support": "COMMUNITY",
+    "support": "TESTING",
     "category": "Render",
 }
 
