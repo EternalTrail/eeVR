@@ -385,7 +385,6 @@ class Renderer:
                 focus_location = self.camera_origin.data.dof.focus_object.matrix_world.translation
                 icm = self.camera_origin.matrix_world.inverted_safe()
                 self.camera.data.dof.focus_distance = abs((icm @ focus_location).z)
-                print('aaaaaaaaaaaaaaaaaaaaaaa ', icm @ focus_location, self.camera.data.dof.focus_distance)
             else:
                 self.camera.data.dof.focus_distance = self.camera_origin.data.dof.focus_distance
             self.camera.data.dof.aperture_blades = self.camera_origin.data.dof.aperture_blades
