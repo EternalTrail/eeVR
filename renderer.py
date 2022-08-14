@@ -23,6 +23,7 @@ commdef = '''
 #define VMARGIN   %f
 #define EXTRUSION %f
 #define INTRUSION %f
+#define FB_SCALE  %f
 
 const float INVSIDEFRAC = 1 / SIDEFRAC;
 const float TBHTEXSCALE = 1 / (TBFRAC - INTRUSION);
@@ -350,10 +351,11 @@ class Renderer:
             self.no_top_bottom_images = True
         hmargin = 0.0 if self.no_side_images else margin
         vmargin = 0.0 if self.no_top_bottom_images else margin
+        fb_scale = 1.0 + max(0.0, props.frontViewOverscan / 100.0)
         # print(f"stichAngle {stitch_margin} margin:{margin} hmargin:{hmargin} vmargin:{vmargin} extrusion:{extrusion} intrusion:{intrusion}")
         # print(f"HTEXSCALE:{1 / (1 + 2 * extrusion + 2 * hmargin)} VTEXSCALE:{1 / (1 + 2 * extrusion + 2 * vmargin)}")
         frag_shader = \
-           (commdef % (fovfrac, sidefrac, tbfrac, h_fov, v_fov, hmargin, vmargin, extrusion, intrusion))\
+           (commdef % (fovfrac, sidefrac, tbfrac, h_fov, v_fov, hmargin, vmargin, extrusion, intrusion, fb_scale))\
          + (dome % domemodes[int(props.domeMethodEnum)] if is_dome else equi)\
          + fetch_setup\
          + ('' if self.no_side_images else fetch_sides)\
@@ -397,8 +399,7 @@ class Renderer:
         side_resolution = trans_resolution(base_resolution, sidefrac, 1, 0, vmargin)
         side_angle = pi/2 + ((2 * stitch_margin) if vmargin > 0.0 else 0.0)
         side_shift_scale = 1 / (1 + 2 * vmargin)
-        fb_scale = 1 + max(0, (props.frontViewOverscan / 100.0))
-        fb_resolution = trans_resolution(base_resolution, fb_scale, fb_scale, extrusion+hmargin, extrusion+vmargin)
+        fb_resolution = trans_resolution(base_resolution, fb_scale, fb_scale, (extrusion+hmargin)*fb_scale, (extrusion+vmargin)*fb_scale)
         fb_angle = (base_angle if no_side_plane else pi/2) + 2 * stitch_margin
         self.camera_settings = {
             'top': (0.0, 0.5*(tbfrac-1+intrusion), pi/2, tb_resolution[0], tb_resolution[1], aspect_ratio),

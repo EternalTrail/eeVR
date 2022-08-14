@@ -22,6 +22,15 @@ Final Image
 
 ![Final Image](img/finalimage.jpg "Final Image")
 
+### Front View Overscan
+
+The resolution is calculated so that the angle of view of each camera (front, back, top, bottom, and side) fits the final rendering resolution, but in this case the panorama is stretched and the front center is not resolved enough.
+
+The resolution can be increased by this amount only for the frontal rendering to compensate for the lack of resolution.
+
+The default setting of 25% almost eliminates the lack of resolution in the center of the image, but it results in excessive resolution on the periphery.
+This means that rendering will take more time.
+
 ### No Side Plane
 
 Generates panorama image **without rendering side views**.
