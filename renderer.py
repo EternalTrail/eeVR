@@ -397,7 +397,8 @@ class Renderer:
         side_resolution = trans_resolution(base_resolution, sidefrac, 1, 0, vmargin)
         side_angle = pi/2 + ((2 * stitch_margin) if vmargin > 0.0 else 0.0)
         side_shift_scale = 1 / (1 + 2 * vmargin)
-        fb_resolution = trans_resolution(base_resolution, 1, 1, extrusion+hmargin, extrusion+vmargin)
+        fb_scale = 1 + max(0, (props.frontViewOverscan / 100.0))
+        fb_resolution = trans_resolution(base_resolution, fb_scale, fb_scale, extrusion+hmargin, extrusion+vmargin)
         fb_angle = (base_angle if no_side_plane else pi/2) + 2 * stitch_margin
         self.camera_settings = {
             'top': (0.0, 0.5*(tbfrac-1+intrusion), pi/2, tb_resolution[0], tb_resolution[1], aspect_ratio),

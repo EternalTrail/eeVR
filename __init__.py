@@ -22,7 +22,7 @@ bl_info = {
     "name": "eeVR",
     "description": "Render in different projections using Eevee engine",
     "author": "EternalTrail, SAMtak",
-    "version": (0, 5, 0),
+    "version": (0, 5, 1),
     "blender": (3, 0, 0),
     "location": "View3D > Tool Tab (Available when EEVEE or Workbench)",
     "warning": "This addon is still in early alpha, may break your blend file!",
@@ -176,6 +176,7 @@ class ToolPanel(Panel):
             col.prop(props, 'HFOV360')
         col.prop(props, 'VFOV')
         col.prop(props, 'stitchMargin')
+        col.prop(props, 'frontViewOverscan')
         col = layout.column()
         col.prop(props, 'noSidePlane')
         col.enabled = props.IsEnableNoSidePlane()
@@ -269,6 +270,17 @@ class Properties(bpy.types.PropertyGroup):
         min=radians(0),
         max=radians(15),
         description="Margin for Seam Blending in degrees",
+    )
+
+    frontViewOverscan: bpy.props.FloatProperty(
+        name="Front View Overscan",
+        subtype='PERCENTAGE',
+        precision=0,
+        step=100,
+        default=25,
+        min=0,
+        max=100,
+        description="Overscan Rate for Front View Rendering",
     )
 
     noSidePlane: bpy.props.BoolProperty(
