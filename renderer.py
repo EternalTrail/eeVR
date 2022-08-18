@@ -23,7 +23,6 @@ commdef = '''
 #define VMARGIN   %f
 #define EXTRUSION %f
 #define INTRUSION %f
-#define FB_SCALE  %f
 
 const float INVSIDEFRAC = 1 / SIDEFRAC;
 const float TBHTEXSCALE = 1 / (TBFRAC - INTRUSION);
@@ -351,11 +350,10 @@ class Renderer:
             self.no_top_bottom_images = True
         hmargin = 0.0 if self.no_side_images else margin
         vmargin = 0.0 if self.no_top_bottom_images else margin
-        fb_scale = 1.0 + max(0.0, props.frontViewOverscan / 100.0)
         # print(f"stichAngle {stitch_margin} margin:{margin} hmargin:{hmargin} vmargin:{vmargin} extrusion:{extrusion} intrusion:{intrusion}")
         # print(f"HTEXSCALE:{1 / (1 + 2 * extrusion + 2 * hmargin)} VTEXSCALE:{1 / (1 + 2 * extrusion + 2 * vmargin)}")
         frag_shader = \
-           (commdef % (fovfrac, sidefrac, tbfrac, h_fov, v_fov, hmargin, vmargin, extrusion, intrusion, fb_scale))\
+           (commdef % (fovfrac, sidefrac, tbfrac, h_fov, v_fov, hmargin, vmargin, extrusion, intrusion))\
          + (dome % domemodes[int(props.domeMethodEnum)] if is_dome else equi)\
          + fetch_setup\
          + ('' if self.no_side_images else fetch_sides)\
@@ -399,14 +397,15 @@ class Renderer:
         side_resolution = trans_resolution(base_resolution, sidefrac, 1, 0, vmargin)
         side_angle = pi/2 + ((2 * stitch_margin) if vmargin > 0.0 else 0.0)
         side_shift_scale = 1 / (1 + 2 * vmargin)
-        fb_resolution = trans_resolution(base_resolution, fb_scale, fb_scale, (extrusion+hmargin)*fb_scale, (extrusion+vmargin)*fb_scale)
+        fb_resolution = trans_resolution(base_resolution, 1, 1, extrusion+hmargin, extrusion+vmargin)
         fb_angle = (base_angle if no_side_plane else pi/2) + 2 * stitch_margin
+        f_scale = 1.0 + max(0.0, props.frontViewOverscan / 100.0)
         self.camera_settings = {
             'top': (0.0, 0.5*(tbfrac-1+intrusion), pi/2, tb_resolution[0], tb_resolution[1], aspect_ratio),
             'bottom': (0.0, 0.5*(1-tbfrac-intrusion), pi/2, tb_resolution[0], tb_resolution[1], aspect_ratio),
             'right': (0.5*(sidefrac-1)*side_shift_scale, 0.0, side_angle, side_resolution[0], side_resolution[1], aspect_ratio),
             'left': (0.5*(1-sidefrac)*side_shift_scale, 0.0, side_angle, side_resolution[0], side_resolution[1], aspect_ratio),
-            'front': (0.0, 0.0, fb_angle, fb_resolution[0], fb_resolution[1], aspect_ratio),
+            'front': (0.0, 0.0, fb_angle, int(ceil(fb_resolution[0] * f_scale)), int(ceil(fb_resolution[1] * f_scale)), aspect_ratio),
             'back': (0.0, 0.0, fb_angle, fb_resolution[0], fb_resolution[1], aspect_ratio)
         }
         if self.is_stereo:
