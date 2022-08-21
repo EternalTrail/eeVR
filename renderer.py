@@ -308,6 +308,9 @@ class Renderer:
         self.camera.matrix_world = self.camera_origin.matrix_world
         # transfer key attributes that may affect rendering, conv dis not needed 'cause it is parallel
         self.camera.data.stereo.interocular_distance = self.camera_origin.data.stereo.interocular_distance
+        # transfer clip_start & clip_end parameter to new camera
+        self.camera.data.clip_start = self.camera_origin.data.clip_start
+        self.camera.data.clip_end = self.camera_origin.data.clip_end
         self.path = bpy.path.abspath("//")
         self.is_stereo = context.scene.render.use_multiview
         self.is_animation = is_animation
