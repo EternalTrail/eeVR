@@ -588,15 +588,16 @@ class Renderer:
         if self.is_stereo:
             self.scene.render.image_settings.views_format = self.view_format
             self.scene.render.image_settings.stereo_3d_format.display_mode = self.stereo_mode
-        for filename in self.createdFiles:
-            os.remove(filename)
+        if not context.preferences.addons['eeVR'].preferences.remain_temporaries:
+            for filename in self.createdFiles:
+                os.remove(filename)
         self.createdFiles.clear()
     
     
     def render_image(self, direction):
         
         # Render the image and load it into the script
-        name = f'temp_img_store_{direction}'
+        name = f'temp_img_store_{os.getpid()}_{direction}'
         if self.is_stereo:
             nameL = name + '_L'
             nameR = name + '_R'

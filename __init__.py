@@ -25,7 +25,6 @@ bl_info = {
     "version": (0, 5, 1),
     "blender": (3, 0, 0),
     "location": "View3D > Tool Tab (Available when EEVEE or Workbench)",
-    "warning": "This addon is still in early alpha, may break your blend file!",
     "wiki_url": "https://github.com/EternalTrail/eeVR",
     "tracker_url": "https://github.com/SAM-tak/eeVR/issues",
     "support": "COMMUNITY",
@@ -328,6 +327,22 @@ class Properties(bpy.types.PropertyGroup):
         """ Unregister eeVR's properties from Blender """
         del bpy.types.Scene.eeVR
 
+
+class Preferences(bpy.types.AddonPreferences):
+    # this must match the addon name, use '__package__'
+    # when defining this in a submodule of a python package.
+    bl_idname = __name__
+
+    remain_temporaries: bpy.props.BoolProperty(
+        name='Remain temporal work files',
+        description='Temporal rendering images will not be removed.',
+        default=False
+    )
+
+    def draw(self, context):
+        self.layout.row().prop(self, 'remain_temporaries')
+
+
 # REGISTER
 register, unregister = bpy.utils.register_classes_factory((
     Properties,
@@ -335,4 +350,5 @@ register, unregister = bpy.utils.register_classes_factory((
     RenderImage,
     RenderAnimation,
     Cancel,
+    Preferences,
 ))
