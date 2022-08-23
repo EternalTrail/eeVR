@@ -292,6 +292,9 @@ class Renderer:
 
         # Set internal variables for the class
         self.scene = context.scene
+        # Get the file extension
+        self.fext = os.path.splitext(bpy.context.scene.render.frame_path(preview=True))[-1]
+        self.fformat = bpy.context.scene.render.image_settings.file_format.format()
         # save original active object
         self.viewlayer_active_object_origin = context.view_layer.objects.active
         # save original active camera handle
@@ -308,6 +311,9 @@ class Renderer:
         self.camera.matrix_world = self.camera_origin.matrix_world
         # transfer key attributes that may affect rendering, conv dis not needed 'cause it is parallel
         self.camera.data.stereo.interocular_distance = self.camera_origin.data.stereo.interocular_distance
+        # transfer clip_start & clip_end parameter to new camera
+        self.camera.data.clip_start = self.camera_origin.data.clip_start
+        self.camera.data.clip_end = self.camera_origin.data.clip_end
         self.path = bpy.path.abspath("//")
         self.is_stereo = context.scene.render.use_multiview
         self.is_animation = is_animation
@@ -617,7 +623,7 @@ class Renderer:
                                     tmp_loc[1]+(0.5*self.IPD*sin(camera_angle)),\
                                     tmp_loc[2]]
 
-            self.scene.render.filepath = self.path + nameL + '.png'
+            self.scene.render.filepath = self.path + nameL + self.fext
             bpy.ops.render.render(write_still=True)
             self.createdFiles.add(self.scene.render.filepath)
             renderedImageL = bpy.data.images.load(self.scene.render.filepath)
@@ -627,7 +633,7 @@ class Renderer:
                                     tmp_loc[1]-(0.5*self.IPD*sin(camera_angle)),\
                                     tmp_loc[2]]
 
-            self.scene.render.filepath = self.path + nameR + '.png'
+            self.scene.render.filepath = self.path + nameR + self.fext
             bpy.ops.render.render(write_still=True)
             self.createdFiles.add(self.scene.render.filepath)
             renderedImageR = bpy.data.images.load(self.scene.render.filepath)
@@ -643,8 +649,7 @@ class Renderer:
                 bpy.data.images.remove(bpy.data.images[nameL])
             if nameR in bpy.data.images:
                 bpy.data.images.remove(bpy.data.images[nameR])
-
-            self.scene.render.filepath = self.path + name + '.png'
+            self.scene.render.filepath = self.path + name + self.fext
             bpy.ops.render.render(write_still=True)
             self.createdFiles.add(self.scene.render.filepath)
             renderedImage =  bpy.data.images.load(self.scene.render.filepath)
@@ -670,7 +675,7 @@ class Renderer:
             if name in bpy.data.images:
                 bpy.data.images.remove(bpy.data.images[name])
 
-            self.scene.render.filepath = self.path + name + '.png'
+            self.scene.render.filepath = self.path + name + self.fext
             bpy.ops.render.render(write_still=True)
             self.createdFiles.add(self.scene.render.filepath)
             renderedImageL = bpy.data.images.load(self.scene.render.filepath)
@@ -712,9 +717,9 @@ class Renderer:
         # Render the images and return their names
         imageList, imageList2 = self.render_images()
         if self.is_animation:
-            image_name = f"frame{self.scene.frame_current:06d}.png"
+            image_name = f"frame{self.scene.frame_current:06d}{self.fext}"
         else:
-            image_name = f"Render Result {self.start_time}.png"
+            image_name = f"Render Result {self.start_time}{self.fext}"
 
         start_time = time.time()
         # Convert the rendered images to equirectangular projection image and save it to the disk
@@ -749,12 +754,12 @@ class Renderer:
         save_start_time = time.time()
         if self.is_animation:
             # Color Management Settings issue solved by nagadomi
-            imageResult.file_format = 'PNG'
+            imageResult.file_format = self.fformat
             imageResult.filepath_raw = self.path+self.folder_name+image_name
             imageResult.save()
             self.scene.frame_set(self.scene.frame_current+frame_step)
         else:
-            imageResult.file_format = 'PNG'
+            imageResult.file_format = self.fformat
             imageResult.filepath_raw = self.path+image_name
             imageResult.save()
 
