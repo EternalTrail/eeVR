@@ -387,12 +387,8 @@ class Renderer:
         # transfer depth of field settings
         self.camera.data.dof.use_dof = self.camera_origin.data.dof.use_dof
         if self.camera.data.dof.use_dof:
-            if self.camera_origin.data.dof.focus_object is not None:
-                focus_location = self.camera_origin.data.dof.focus_object.matrix_world.translation
-                icm = self.camera_origin.matrix_world.inverted_safe()
-                self.camera.data.dof.focus_distance = abs((icm @ focus_location).z)
-            else:
-                self.camera.data.dof.focus_distance = self.camera_origin.data.dof.focus_distance
+            self.camera.data.dof.focus_distance = self.camera_origin.data.dof.focus_distance
+            self.camera.data.dof.aperture_fstop = self.camera_origin.data.dof.aperture_fstop
             self.camera.data.dof.aperture_blades = self.camera_origin.data.dof.aperture_blades
             self.camera.data.dof.aperture_ratio = self.camera_origin.data.dof.aperture_ratio
             self.camera.data.dof.aperture_rotation = self.camera_origin.data.dof.aperture_rotation
@@ -564,10 +560,6 @@ class Renderer:
         self.camera.data.shift_x = self.camera_settings[direction][0]
         self.camera.data.shift_y = self.camera_settings[direction][1]
         self.camera.data.angle = self.camera_settings[direction][2]
-        if self.camera.data.dof.use_dof:
-            rate = tan(self.camera_origin.data.angle / 2) / tan(self.camera.data.angle / 2)
-            self.camera.data.dof.aperture_fstop = self.camera_origin.data.dof.aperture_fstop * rate
-            print(f"fstop {self.camera.data.dof.aperture_fstop}")
         self.scene.render.resolution_x = self.camera_settings[direction][3]
         self.scene.render.resolution_y = self.camera_settings[direction][4]
         if self.camera_settings[direction][5] >= 1.0:
@@ -601,7 +593,13 @@ class Renderer:
     
     
     def render_image(self, direction):
-        
+
+        # update focus distance if focus object is set
+        if self.camera.data.dof.use_dof and self.camera_origin.data.dof.focus_object is not None:
+            focus_location = self.camera_origin.data.dof.focus_object.matrix_world.translation
+            icm = self.camera_origin.matrix_world.inverted_safe()
+            self.camera.data.dof.focus_distance = abs((icm @ focus_location).z)
+
         # Render the image and load it into the script
         name = f'temp_img_store_{os.getpid()}_{direction}'
         if self.is_stereo:
