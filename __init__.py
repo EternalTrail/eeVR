@@ -22,7 +22,7 @@ bl_info = {
     "name": "eeVR",
     "description": "Render in different projections using Eevee engine",
     "author": "EternalTrail, SAMtak",
-    "version": (0, 5, 1),
+    "version": (0, 5, 2),
     "blender": (3, 0, 0),
     "location": "View3D > Tool Tab (Available when EEVEE or Workbench)",
     "wiki_url": "https://github.com/EternalTrail/eeVR",
