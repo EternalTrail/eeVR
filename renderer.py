@@ -560,6 +560,9 @@ class Renderer:
         self.camera.data.shift_x = self.camera_settings[direction][0]
         self.camera.data.shift_y = self.camera_settings[direction][1]
         self.camera.data.angle = self.camera_settings[direction][2]
+        if self.camera.data.dof.use_dof:
+            rate = tan(self.camera_origin.data.angle / 2) / tan(self.camera.data.angle / 2)
+            self.camera.data.dof.aperture_fstop = self.camera_origin.data.dof.aperture_fstop * rate
         self.scene.render.resolution_x = self.camera_settings[direction][3]
         self.scene.render.resolution_y = self.camera_settings[direction][4]
         if self.camera_settings[direction][5] >= 1.0:
@@ -569,7 +572,7 @@ class Renderer:
             self.scene.render.pixel_aspect_x = 1 / self.camera_settings[direction][5]
             self.scene.render.pixel_aspect_y = 1.0
         self.scene.render.resolution_percentage = 100
-        print(f"{direction} : {self.scene.render.resolution_x} x {self.scene.render.resolution_y} {degrees(self.camera.data.angle):.2f}° [{self.camera.data.shift_x}, {self.camera.data.shift_y}] ({self.scene.render.pixel_aspect_x} : {self.scene.render.pixel_aspect_y})")
+        print(f"{direction} : {self.scene.render.resolution_x} x {self.scene.render.resolution_y} {degrees(self.camera.data.angle):.2f}° [{self.camera.data.shift_x:.3f}, {self.camera.data.shift_y:.3f}] ({self.scene.render.pixel_aspect_x:.2f} : {self.scene.render.pixel_aspect_y:.2f}) fstop={self.camera.data.dof.aperture_fstop:.2f}")
 
 
     def clean_up(self, context):
