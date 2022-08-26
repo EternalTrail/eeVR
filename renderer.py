@@ -594,12 +594,6 @@ class Renderer:
     
     def render_image(self, direction):
 
-        # update focus distance if focus object is set
-        if self.camera.data.dof.use_dof and self.camera_origin.data.dof.focus_object is not None:
-            focus_location = self.camera_origin.data.dof.focus_object.matrix_world.translation
-            icm = self.camera_origin.matrix_world.inverted_safe()
-            self.camera.data.dof.focus_distance = abs((icm @ focus_location).z)
-
         # Render the image and load it into the script
         name = f'temp_img_store_{os.getpid()}_{direction}'
         if self.is_stereo:
@@ -685,6 +679,12 @@ class Renderer:
     
     
     def render_images(self):
+        
+        # update focus distance if focus object is set
+        if self.camera.data.dof.use_dof and self.camera_origin.data.dof.focus_object is not None:
+            focus_location = self.camera_origin.data.dof.focus_object.matrix_world.translation
+            icm = self.camera_origin.matrix_world.inverted_safe()
+            self.camera.data.dof.focus_distance = abs((icm @ focus_location).z)
         
         # Render the images for every direction
         image_list_l = []
