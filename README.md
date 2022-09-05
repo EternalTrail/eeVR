@@ -1,10 +1,12 @@
 # eeVR
 
+**This project is not currently in active development, you're still free to post issues and make pull requests and I will try my best to guide you/merge, even if you have to wait a while. I do plan on coming back to this, although that won't happen for probably a year or two.**
+
 Blender addon to render 360° and 180° images and videos in eevee engine with support for stereoscopic rendering.
 
 ## Getting Started
 
-You will need to get [**Blender 2.8x higher**](https://www.blender.org), install it, download the zip file from this GitHub, load the addon into Blender by installing the zip file in Blender Preferences > Add-ons > Install, search for "eeVR" under the Community tab and click the checkbox to enable it. A tool panel will appear in the 3D Viewport's **Tool tab**, FOV value adjustment, and buttons for rendering stills and animations. **The rendered images/image sequences will be stored in the same directory as the .blend file**.
+You will need to get [**Blender 2.8X** or **Blender 2.9X**](https://www.blender.org), install it, download the zip file from this GitHub, load the addon into Blender by installing the zip file in Blender Preferences > Add-ons > Install, search for "eeVR" under the Testing tab and click the checkbox to enable it. A tool panel will appear in the 3D Viewport's **Tool tab**, FOV value adjustment, and buttons for rendering stills and animations. **The rendered images/image sequences will be stored in the same directory as the .blend file**.
 
 **NOTE** : The eeVR panel appears only when the render engine is EEVEE or WORKBENCH.
 
