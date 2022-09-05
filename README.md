@@ -41,6 +41,10 @@ It is neccesary Horizontal FOV is under 160°.
 
 If you set same angle for Horizontal FOV and Vertical FOV both, eeVR makes panorama image from front render image only.
 
+### Keep in mind
+
+If you have suggestions for future updates or come across any bugs don't hesitate to open up a "new issue" in the issue tab or write me an email at [andriux19960823@gmail.com](mailto:andriux19960823@gmail.com).
+
 ## License
 
 This project is licensed under the GNU General Public License v3.0 - see the [LICENSE.md](LICENSE.md) file for details.
