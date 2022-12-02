@@ -1,0 +1,9 @@
+*.png binary
+*.jpg binary
+*.otf binary
+*.eot binary
+*.svg binary
+*.ttf binary
+*.woff binary
+/.* export-ignore
+/package.sh export-ignore
