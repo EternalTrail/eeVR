@@ -589,7 +589,7 @@ class Renderer:
         if self.is_stereo:
             self.scene.render.image_settings.views_format = self.view_format
             self.scene.render.image_settings.stereo_3d_format.display_mode = self.stereo_mode
-        if not context.preferences.addons['eeVR'].preferences.remain_temporaries:
+        if not context.preferences.addons[__package__].preferences.remain_temporaries:
             for filename in self.createdFiles:
                 os.remove(filename)
         self.createdFiles.clear()
