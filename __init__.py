@@ -28,7 +28,7 @@ bl_info = {
     "warning": "This addon is still in early alpha, may break your blend file!",
     "wiki_url": "https://github.com/EternalTrail/eeVR",
     "tracker_url": "https://github.com/EternalTrail/eeVR/issues",
-    "support": "TESTING",
+    "support": "COMMUNITY",
     "category": "Render",
 }
 
