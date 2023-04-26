@@ -2,7 +2,6 @@ import bpy
 import os
 import time
 import gpu
-import bgl
 import numpy as np
 from math import sin, cos, tan, atan, ceil, degrees, pi
 from datetime import datetime
@@ -95,18 +94,6 @@ float atan2(in float y, in float x)
 {
     return x == 0.0 ? sign(y) * 0.5 * PI : atan(y, x);
 }
-
-// Input cubemap textures
-uniform sampler2D cubeLeftImage;
-uniform sampler2D cubeRightImage;
-uniform sampler2D cubeBottomImage;
-uniform sampler2D cubeTopImage;
-uniform sampler2D cubeBackImage;
-uniform sampler2D cubeFrontImage;
-
-in vec2 vTexCoord;
-
-out vec4 fragColor;
 
 void main() {
 '''
@@ -264,11 +251,6 @@ blend_seam_sides = '''
 
 # Define the vertex shader
 vertex_shader = '''
-in vec3 aVertexPosition;
-in vec2 aVertexTextureCoord;
-
-out vec2 vTexCoord;
-
 void main() {
     vTexCoord = aVertexTextureCoord;
     gl_Position = vec4(aVertexPosition, 1);
@@ -368,8 +350,24 @@ class Renderer:
          + (fetch_front % ((blend_seam_front_h if hmargin > 0.0 or no_side_plane else '') + (blend_seam_front_v if vmargin > 0.0 or no_side_plane else '')))\
          + (blend_seam_sides if not self.no_side_images and vmargin > 0.0 else '')\
          + '}'
-        self.shader = gpu.types.GPUShader(vertex_shader, frag_shader)
-        
+
+        shader_info = gpu.types.GPUShaderCreateInfo()
+        vert_out = gpu.types.GPUStageInterfaceInfo("eevr")
+        vert_out.smooth("VEC2", "vTexCoord")
+        shader_info.vertex_in(0, 'VEC3', "aVertexPosition")
+        shader_info.vertex_in(1, 'VEC2', "aVertexTextureCoord")
+        shader_info.vertex_out(vert_out)
+        shader_info.sampler(0, 'FLOAT_2D', "cubeLeftImage")
+        shader_info.sampler(1, 'FLOAT_2D', "cubeRightImage")
+        shader_info.sampler(2, 'FLOAT_2D', "cubeBottomImage")
+        shader_info.sampler(3, 'FLOAT_2D', "cubeTopImage")
+        shader_info.sampler(4, 'FLOAT_2D', "cubeBackImage")
+        shader_info.sampler(5, 'FLOAT_2D', "cubeFrontImage")
+        shader_info.fragment_out(0, 'VEC4', "fragColor")
+        shader_info.vertex_source(vertex_shader)
+        shader_info.fragment_source(frag_shader)
+        self.shader = gpu.shader.create_from_info(shader_info)
+
         # Set the image name to the current time
         self.start_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
         # get folder name from outside
@@ -439,9 +437,11 @@ class Renderer:
         
         # Change the color space of all of the images to Linear
         # and load them into OpenGL textures
+        textures = []
         for image in imageList:
             image.colorspace_settings.name='Linear'
-            image.gl_load()
+            tex = gpu.texture.from_image(image)
+            textures.append(tex)
         
         # set the size of the final image
         width = self.image_size[0]
@@ -451,66 +451,44 @@ class Renderer:
         offscreen = gpu.types.GPUOffScreen(width, height)
 
         with offscreen.bind():
-            bgl.glClearColor(0.0, 0.0, 0.0, 1.0)
-            bgl.glClear(bgl.GL_COLOR_BUFFER_BIT)
-
+            fb = gpu.state.active_framebuffer_get()
+            fb.clear(color=(0.0, 0.0, 0.0, 0.0))
             self.shader.bind()
-            
-            def bind_and_filter(tex, bindcode, image=None, imageNum=None):
-                bgl.glActiveTexture(tex)
-                bgl.glBindTexture(bgl.GL_TEXTURE_2D, bindcode)
-                bgl.glTexParameterf(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_MIN_FILTER, bgl.GL_LINEAR)
-                bgl.glTexParameterf(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_MAG_FILTER, bgl.GL_LINEAR)
-                bgl.glTexParameteri(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_WRAP_S, bgl.GL_CLAMP_TO_EDGE)
-                bgl.glTexParameteri(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_WRAP_T, bgl.GL_CLAMP_TO_EDGE)
-                if image!=None and imageNum!=None:
-                    try:
-                        self.shader.uniform_int(image, imageNum)
-                    except ValueError as err:
-                        print(f"eeVR : WARING : {err}")
-            
-            # Bind all of the cubemap textures and enable correct filtering and wrapping
-            # to prevent seams
-            bind_and_filter(bgl.GL_TEXTURE0, imageList[0].bindcode, "cubeFrontImage", 0)
+
+            self.shader.uniform_sampler("cubeFrontImage", textures[0])
             if self.no_side_images:
                 if not self.no_top_bottom_images:
-                    bind_and_filter(bgl.GL_TEXTURE1, imageList[1].bindcode, "cubeBottomImage", 1)
-                    bind_and_filter(bgl.GL_TEXTURE2, imageList[2].bindcode, "cubeTopImage", 2)
+                    self.shader.uniform_sampler("cubeBottomImage", textures[1])
+                    self.shader.uniform_sampler("cubeTopImage", textures[2])
                     if not self.no_back_image:
-                        bind_and_filter(bgl.GL_TEXTURE3, imageList[3].bindcode, "cubeBackImage", 3)
+                        self.shader.uniform_sampler("cubeBackImage", textures[3])
                 else:
                     if not self.no_back_image:
-                        bind_and_filter(bgl.GL_TEXTURE1, imageList[1].bindcode, "cubeBackImage", 1) # for development purpose
+                        self.shader.uniform_sampler("cubeBackImage", textures[1]) # for development purpose
             else:
-                bind_and_filter(bgl.GL_TEXTURE1, imageList[1].bindcode, "cubeLeftImage", 1)
-                bind_and_filter(bgl.GL_TEXTURE2, imageList[2].bindcode, "cubeRightImage", 2)
+                self.shader.uniform_sampler("cubeLeftImage", textures[1])
+                self.shader.uniform_sampler("cubeRightImage", textures[2])
                 if not self.no_top_bottom_images:
-                    bind_and_filter(bgl.GL_TEXTURE3, imageList[3].bindcode, "cubeBottomImage", 3)
-                    bind_and_filter(bgl.GL_TEXTURE4, imageList[4].bindcode, "cubeTopImage", 4)
+                    self.shader.uniform_sampler("cubeBottomImage", textures[3])
+                    self.shader.uniform_sampler("cubeTopImage", textures[4])
                     if not self.no_back_image:
-                        bind_and_filter(bgl.GL_TEXTURE5, imageList[5].bindcode, "cubeBackImage", 5)
+                        self.shader.uniform_sampler("cubeBackImage", textures[5])
                 else:
                     if not self.no_back_image:
-                        bind_and_filter(bgl.GL_TEXTURE3, imageList[3].bindcode, "cubeBackImage", 3)
+                        self.shader.uniform_sampler("cubeBackImage", textures[3])
             
-            # Bind the resulting texture
-            bind_and_filter(bgl.GL_TEXTURE6, offscreen.color_texture)
-
             # Render the image
             batch.draw(self.shader)
 
-            # Unload the textures
-            for image in imageList:
-                image.gl_free()
-            
             # Read the resulting pixels into a buffer
-            buffer = bgl.Buffer(bgl.GL_FLOAT, width * height * 4)
-            bgl.glGetTexImage(bgl.GL_TEXTURE_2D, 0, bgl.GL_RGBA, bgl.GL_FLOAT, buffer)
+            buffer = fb.read_color(0, 0, width, height, 4, 0, 'FLOAT')
+            buffer.dimensions = width * height * 4
 
         # Unload the offscreen texture
         offscreen.free()
         
         # Remove the cubemap textures:
+        del textures
         for image in imageList:
             bpy.data.images.remove(image)
         
