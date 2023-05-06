@@ -90,7 +90,7 @@ vec2 to_uv_back(vec3 pt)
     return apply_margin(to_uv(pt.x/pt.z, -pt.y/pt.z));
 }
 
-float atan2(in float y, in float x)
+float atan2(float y, float x)
 {
     return x == 0.0 ? sign(y) * 0.5 * PI : atan(y, x);
 }
