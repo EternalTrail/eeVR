@@ -159,6 +159,7 @@ fetch_setup = '''
         angle += (tob + lor * (1 - near_horizon)) * (2 - abs(pt.z/pt.y)) * 0.25 * PI;
         if(angle > VCLIP*0.5) discard;
     }
+    fragColor = vec4(0.0);
 '''
 
 fetch_sides = '''
