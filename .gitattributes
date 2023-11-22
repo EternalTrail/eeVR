@@ -7,3 +7,5 @@
 *.woff binary
 /.* export-ignore
 /package.sh export-ignore
+/README.md export-ignore
+/img/ export-ignore

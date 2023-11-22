@@ -5,7 +5,7 @@
 import os
 import time
 from datetime import datetime
-from math import radians
+from math import radians, degrees
 
 if "bpy" in locals():
     import importlib
@@ -22,10 +22,9 @@ bl_info = {
     "name": "eeVR",
     "description": "Render in different projections using Eevee engine",
     "author": "EternalTrail",
-    "version": (0, 5, 2),
-    "blender": (2, 82, 7),
-    "location": "View3D > Tool Tab (Available when EEVEE or Workbench)",
-    "warning": "This addon is still in early alpha, may break your blend file!",
+    "version": (1, 0, 0),
+    "blender": (3, 6, 0),
+    "location": "Properties > Render Tab (Available when EEVEE or Workbench)",
     "wiki_url": "https://github.com/EternalTrail/eeVR",
     "tracker_url": "https://github.com/EternalTrail/eeVR/issues",
     "support": "TESTING",
@@ -36,6 +35,9 @@ bl_info = {
 def has_invalid_condition(self : 'Operator', context : 'Context'):
     if context.scene.camera == None:
         self.report({'ERROR'}, "eeVR ERROR : Scene camera is not set.")
+        return True
+    if context.active_object.mode != 'OBJECT':
+        self.report({'ERROR'}, "eeVR ERROR : Active object's mode is not object mode.")
         return True
     return False
 
@@ -112,8 +114,8 @@ class RenderAnimation(Operator):
 
         # knowing it's animation, creates folder outside vrrender class, pass folder name to it
         start_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-        folder_name = f"Render Result {start_time}/"
-        path = bpy.path.abspath("//")
+        folder_name = f"{os.path.splitext(bpy.path.basename(bpy.data.filepath))[0]} {start_time}/"
+        path = bpy.path.abspath(context.preferences.filepaths.render_output_directory)
         os.makedirs(path+folder_name, exist_ok=True)
         self.renderer = Renderer(context, True, folder_name)
         
@@ -145,15 +147,17 @@ class Cancel(Operator):
         return {'FINISHED'}
 
 
-class ToolPanel(Panel):
-    """Tool panel for VR rendering"""
+class RenderPanel(Panel):
+    """Render panel for VR rendering"""
 
-    bl_idname = "EEVR_PT_tool"
+    bl_idname = "EEVR_PT_render"
     bl_label = "eeVR"
-    bl_space_type = 'VIEW_3D'
-    bl_region_type = 'UI'
-    bl_category = "Tool"
-
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "render"
+    bl_category = "eeVR"
+    bl_options = {'DEFAULT_CLOSED'}
+    
     COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
 
     @classmethod
@@ -175,18 +179,29 @@ class ToolPanel(Panel):
         else:
             col.prop(props, 'HFOV360')
         col.prop(props, 'VFOV')
+        if props.get_hfov() <= radians(270):
+            col.prop(props, 'frontFOV')
+            max_fov = props.get_max_fov()
+            if props.frontFOV > max_fov:
+                col.label(icon='ERROR', text=f"clips to {degrees(max_fov):3.0f}°")
         col.prop(props, 'stitchMargin')
-        col.prop(props, 'frontViewOverscan')
-        col = layout.column()
-        col.prop(props, 'noSidePlane')
-        col.enabled = props.IsEnableNoSidePlane()
-        if context.scene.render.use_multiview and props.GetHFOV() > radians(180):
-            col = layout.column()
+        col.prop(props, 'frontViewResolution')
+        if props.get_hfov() > props.get_front_fov():
+            col.prop(props, 'sideViewResolution')
+        if props.get_vfov() > props.get_front_fov():
+            col.prop(props, 'topViewResolution')
+            col.prop(props, 'bottomViewResolution')
+        if props.get_hfov() > radians(270):
+            col.prop(props, 'rearViewResolution')
+        if context.scene.render.use_multiview and props.is_top_bottom(context):
+            col.prop(props, 'isTopRightEye')
+        if context.scene.render.use_multiview and props.get_hfov() > radians(180):
+            col.prop(props, 'appliesParallaxForSideAndBack')
             col.label(icon='ERROR', text="eeVR cannot support stereo over 180° fov correctly.")
         layout.separator()
         col = layout.column()
-        col.operator(RenderImage.bl_idname, text="Render Image")
-        col.operator(RenderAnimation.bl_idname, text="Render Animation")
+        col.operator(RenderImage.bl_idname, icon="RENDER_STILL", text="Render Image")
+        col.operator(RenderAnimation.bl_idname, icon="RENDER_ANIMATION", text="Render Animation")
         if not props.cancel:
             col.operator(Cancel.bl_idname, text="Cancel")
             col.label(text=f"Rendering frame {context.scene.frame_current}")
@@ -260,6 +275,18 @@ class Properties(bpy.types.PropertyGroup):
         description="Vertical Field of view in degrees",
     )
 
+    frontFOV: bpy.props.FloatProperty(
+        name="Front View FOV",
+        subtype='ANGLE',
+        unit='ROTATION',
+        precision=0,
+        step=100,
+        default=radians(90),
+        min=radians(90),
+        max=radians(160),
+        description="Front View's Field of view in degrees",
+    )
+
     stitchMargin: bpy.props.FloatProperty(
         name="Stitch Margin",
         subtype='ANGLE',
@@ -272,21 +299,77 @@ class Properties(bpy.types.PropertyGroup):
         description="Margin for Seam Blending in degrees",
     )
 
-    frontViewOverscan: bpy.props.FloatProperty(
-        name="Front View Overscan",
+    frontViewResolution: bpy.props.FloatProperty(
+        name="Front View Resolution",
         subtype='PERCENTAGE',
         precision=0,
         step=100,
-        default=25,
-        min=0,
+        default=90,
+        min=1,
         max=100,
-        description="Overscan Rate for Front View Rendering",
+        description="Overscan/Reduction Rate for Front View Rendering",
     )
 
-    noSidePlane: bpy.props.BoolProperty(
-        name="No Side Plane",
+    sideViewResolution: bpy.props.FloatProperty(
+        name="Side View Resolution",
+        subtype='PERCENTAGE',
+        precision=0,
+        step=100,
+        default=90,
+        min=1,
+        max=100,
+        description="Overscan/Reduction Rate for Side View Rendering",
+    )
+
+    topViewResolution: bpy.props.FloatProperty(
+        name="Top View Resolution",
+        subtype='PERCENTAGE',
+        precision=0,
+        step=100,
+        default=90,
+        min=1,
+        max=100,
+        description="Overscan/Reduction Rate for Top View Rendering",
+    )
+
+    bottomViewResolution: bpy.props.FloatProperty(
+        name="Bottom View Resolution",
+        subtype='PERCENTAGE',
+        precision=0,
+        step=100,
+        default=90,
+        min=1,
+        max=100,
+        description="Overscan/Reduction Rate for Bottom View Rendering",
+    )
+
+    rearViewResolution: bpy.props.FloatProperty(
+        name="Rear View Resolution",
+        subtype='PERCENTAGE',
+        precision=0,
+        step=100,
+        default=90,
+        min=1,
+        max=100,
+        description="Overscan/Reduction Rate for Rear View Rendering",
+    )
+
+    appliesParallaxForSideAndBack: bpy.props.BoolProperty(
+        description="If it is on, it allows for noticeable seams or blending artifacts in side and rear views to introduce collect parallax"\
+         " at over HFOV 180 rendering. default is false.",
         default=False,
-        description="Not render side views. This is enable when Horizontal FOV under 160°",
+        name="Apply Parallax for side and rear view",
+    )
+
+    isTopRightEye: bpy.props.BoolProperty(
+        description="If it is on, right eye image will be placed as top image. default is false.",
+        default=False,
+        name="Top is RightEye",
+    )
+
+    trueTopBottom: bpy.props.BoolProperty(
+        name="TrueTopBottom",
+        default=False
     )
 
     cancel: bpy.props.BoolProperty(
@@ -306,17 +389,23 @@ class Properties(bpy.types.PropertyGroup):
             return radians(360)
         return src
 
-    def GetHFOV(self) -> float:
+    def get_hfov(self) -> float:
         return self.snap_angle(self.HFOV180 if self.fovModeEnum == '180' else self.HFOV360)
 
-    def GetVFOV(self) -> float:
+    def get_vfov(self) -> float:
         return self.snap_angle(self.VFOV)
 
-    def IsEnableNoSidePlane(self) -> bool:
-        return self.GetHFOV() < radians(165)
+    def get_max_fov(self) -> float:
+        return max(self.get_hfov(), self.get_vfov())
 
-    def GetNoSidePlane(self) -> bool:
-        return self.IsEnableNoSidePlane() and self.noSidePlane
+    def get_front_fov(self) -> float:
+        return min(self.snap_angle(self.frontFOV), self.get_max_fov()) if self.get_hfov() <= radians(270) else radians(90)
+
+    def is_top_bottom(self, context: Context) -> bool:
+        if self.cancel:
+            return context.scene.render.image_settings.stereo_3d_format.display_mode =='TOPBOTTOM'
+        else:
+            return self.trueTopBottom
 
     @classmethod
     def register(cls):
@@ -334,20 +423,30 @@ class Preferences(bpy.types.AddonPreferences):
     # when defining this in a submodule of a python package.
     bl_idname = __name__
 
-    remain_temporaries: bpy.props.BoolProperty(
+    remain_temporalies: bpy.props.BoolProperty(
         name='Remain temporal work files',
         description='Temporal rendering images will not be removed.',
         default=False
     )
 
+    temporal_file_format: bpy.props.EnumProperty(
+        items=[
+            ("PNG", "PNG", "Output image in PNG format."),
+            ("TARGA_RAW", "Targa Raw", "Output image in uncompressed Targa format."),
+        ],
+        default="TARGA_RAW",
+        name="Temporal File Format",
+    )
+
     def draw(self, context):
-        self.layout.row().prop(self, 'remain_temporaries')
+        self.layout.row().prop(self, 'remain_temporalies')
+        self.layout.row().prop(self, 'temporal_file_format')
 
 
 # REGISTER
 register, unregister = bpy.utils.register_classes_factory((
     Properties,
-    ToolPanel,
+    RenderPanel,
     RenderImage,
     RenderAnimation,
     Cancel,
