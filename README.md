@@ -1,16 +1,18 @@
 # eeVR
 
-**This project is not currently in active development, you're still free to post issues and make pull requests and I will try my best to guide you/merge, even if you have to wait a while. I do plan on coming back to this, although that won't happen for probably a year or two.**
-
 Blender addon to render 360° and 180° images and videos in eevee engine with support for stereoscopic rendering.
 
 ## Getting Started
 
-You will need to get [**Blender 2.8X** or **Blender 2.9X**](https://www.blender.org), install it, download the zip file from this GitHub, load the addon into Blender by installing the zip file in Blender Preferences > Add-ons > Install, search for "eeVR" under the Testing tab and click the checkbox to enable it. A tool panel will appear in the 3D Viewport's **Tool tab**, FOV value adjustment, and buttons for rendering stills and animations. **The rendered images/image sequences will be stored in the same directory as the .blend file**.
+You will need to get [**Blender 3.6 or higher**](https://www.blender.org), install it, download the zip file from this GitHub,
+load the addon into Blender by installing the zip file in Blender Preferences > Add-ons > Install,
+search for "eeVR" under the Community tab and click the checkbox to enable it.
+A eeVR panel will appear in the Properties' **Render tab**, FOV value adjustment, and buttons for rendering stills and animations.
+**The rendered images/image sequences will be stored in the same directory as the .blend file**.
 
 **NOTE** : The eeVR panel appears only when the render engine is EEVEE or WORKBENCH.
 
-![Tool Panel](img/tools-01.jpg "Tool Panel") ![Tool Panel](img/tools-02.jpg "Tool Panel")
+![Tool Panel](img/render-panel.jpg "Render Panel")
 
 ### Stitch Margin
 
@@ -24,22 +26,42 @@ Final Image
 
 ![Final Image](img/finalimage.jpg "Final Image")
 
-### Front View Overscan
+### Resolution scales per view
 
-The resolution is calculated so that the angle of view of each camera (front, back, top, bottom, and side) fits the final rendering resolution, but in this case the panorama is stretched and the front center is not resolved enough.
+The resolution is calculated so that the angle of view of each camera (front, back, top, bottom, and side) fits the final rendering resolution.
 
-The resolution can be increased by this amount only for the frontal rendering to compensate for the lack of resolution.
+There is no shortage of resolution, but it's slightly excessive. Setting it to around 90% doesn't result in a noticeable lack of resolution.
 
-The default setting of 25% almost eliminates the lack of resolution in the center of the image, but it results in excessive resolution on the periphery.
-This means that rendering will take more time.
+To reduce rendering time, it's advisable to specify the lowest possible resolution for non-front-facing renderings with lower importance.
 
-### No Side Plane
+You can set it from 1% to a maximum of 100%.
 
-Generates panorama image **without rendering side views**.
+### Front View FOV
 
-It is neccesary Horizontal FOV is under 160°.
+You can specify a field of view (FOV) greater than 90° but less than 160° exclusively for the front view.
 
-If you set same angle for Horizontal FOV and Vertical FOV both, eeVR makes panorama image from front render image only.
+Since rendering the front view is typically crucial, having a wider FOV for the front view in a single rendering pass can push the boundaries with other
+views to the corners of the field of view, improving quality.
+
+If the front view FOV is greater than the horizontal FOV, the side view rendering is omitted. Similarly, if it's greater than the vertical FOV,
+the top and bottom views' rendering is omitted. If both conditions are met, the front view rendering occurs only once.
+In this case, the FOV is clipped to whichever is larger between the horizontal and vertical FOVs.
+
+**NOTE** : This feature is active only when horizontal FOV is less than 270 degrees.
+
+### Applies Parallax For Side And Rear
+
+When enabled, it allows for noticeable seams or blending artifacts in side and rear views' margins to introduce collect parallax at over HFOV 180 rendering.
+
+This switch only available if Horizontal FOV greater than 180° and stereo rendering is active.
+
+### 'Top is RightEye' switch
+
+When enabled, in 'Top-Bottom' mode of stereo rendering, the right-eye image is positioned above.
+
+By default, when it's turned off, the left-eye image is placed above, and the right-eye image is positioned below.
+
+By the way, in the side-by-side mode, you can swap the left and right by checking the "Cross-Eyed" option in the Output Properties.
 
 ### Keep in mind
 
