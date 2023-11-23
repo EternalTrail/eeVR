@@ -27,7 +27,7 @@ bl_info = {
     "location": "Properties > Render Tab (Available when EEVEE or Workbench)",
     "wiki_url": "https://github.com/EternalTrail/eeVR",
     "tracker_url": "https://github.com/EternalTrail/eeVR/issues",
-    "support": "TESTING",
+    "support": "COMMUNITY",
     "category": "Render",
 }
 
