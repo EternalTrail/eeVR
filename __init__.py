@@ -118,7 +118,7 @@ class RenderAnimation(Operator):
         path = bpy.path.abspath(context.preferences.filepaths.render_output_directory)
         os.makedirs(path+folder_name, exist_ok=True)
         self.renderer = Renderer(context, True, folder_name)
-        
+
         self.frame_end = context.scene.frame_end
         frame_start = context.scene.frame_start
         context.scene.frame_set(frame_start)
@@ -157,7 +157,7 @@ class RenderPanel(Panel):
     bl_context = "render"
     bl_category = "eeVR"
     bl_options = {'DEFAULT_CLOSED'}
-    
+
     COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
 
     @classmethod

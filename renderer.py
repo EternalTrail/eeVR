@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from . import Properties
     from . import Preferences
 
-# Define parts of fragment shader 
+# Define parts of fragment shader
 commdef = '''
 #define PI          3.1415926535897932384626
 #define FOVFRAC     %f
@@ -90,7 +90,7 @@ dome = '''
     vec2 d = vTexCoord.xy;
     float r = length(d);
     if(r > 1.0) discard;
-    
+
     // Calculate the position on unit sphere
     vec2 dunit = normalize(d);
     float phi = FOVFRAC * PI * r;
@@ -111,7 +111,7 @@ equi = '''
     // Calculate the pointing angle
     float azimuth = FOVFRAC * PI * vTexCoord.x;
     float elevation = 0.5 * PI * vTexCoord.y;
-    
+
     // Calculate the position on unit sphere
     vec3 pt;
     pt.x = cos(elevation) * sin(azimuth);
@@ -167,7 +167,7 @@ fetch_sides = '''
 blend_seam_sides = '''
     {
         float range = over45 * (1 - over135);
-        
+
         float alpha = range * right * tob * up * smoothstep(1.0, 0.0, clamp((right_uv.y - 1 + ACTUALVMARGIN) / ACTUALVMARGIN, 0.0, 1.0));
         alpha *= right_inner;
         fragColor = mix(fragColor, texture(cubeRightImage, right_uv), alpha);
@@ -207,7 +207,7 @@ blend_seam_front_h = '''
             float in_range = step(0, uv.x) * (1 - step(1, uv.x));
             float alpha = in_range * front * lor * right * smoothstep(1.0, 0.0, clamp((uv.x - 1 + ACTUALHMARGIN) / ACTUALHMARGIN, 0.0, 1.0));
             fragColor = mix(fragColor, texture(cubeFrontImage, uv), alpha);
-            
+
             alpha = in_range * front * lor * (1 - right) * smoothstep(0.0, 1.0, clamp(uv.x / ACTUALHMARGIN, 0.0, 1.0));
             fragColor = mix(fragColor, texture(cubeFrontImage, uv), alpha);
         }
@@ -228,7 +228,7 @@ blend_seam_back_h = '''
         {
             float alpha = (1 - front) * lor * right * smoothstep(1.0, 0.0, clamp((1.0 - uv.x - 1 + ACTUALHMARGIN) / ACTUALHMARGIN, 0.0, 1.0));
             fragColor = mix(fragColor, texture(cubeBackImage, uv), alpha);
-            
+
             alpha = (1 - front) * lor * (1 - right) * smoothstep(0.0, 1.0, clamp((1.0 - uv.x) / ACTUALHMARGIN, 0.0, 1.0));
             fragColor = mix(fragColor, texture(cubeBackImage, uv), alpha);
         }
@@ -253,13 +253,13 @@ void main() {
 '''
 
 class Renderer:
-    
+
     def __init__(self, context : bpy.types.Context, is_animation = False, folder = ''):
-        
+
         # Check if the file is saved or not, can cause errors when not saved
         if not bpy.data.is_saved:
             raise PermissionError("Save file before rendering")
-        
+
         props: Properties = context.scene.eeVR
         self.preferences: Preferences = context.preferences.addons[__package__].preferences
 
@@ -312,7 +312,7 @@ class Renderer:
         self.seamless = not (context.scene.render.use_multiview and h_fov > pi and props.appliesParallaxForSideAndBack)
 
         self.createdFiles = set()
-        
+
         # Calcurate dimension
         self.resolution_x_origin = self.scene.render.resolution_x
         self.resolution_y_origin = self.scene.render.resolution_y
@@ -344,7 +344,7 @@ class Renderer:
         tbfrac = max(sidefrac, max(0, min(1, (v_fov - pi/2) / pi)))
 
         base_angle = min(h_fov, front_fov)
-        
+
         stitch_margin = 0.0 if self.no_side_images and self.no_top_bottom_images else props.stitchMargin
         margin = max(0.0, 0.5 * (tan(base_angle/2 + stitch_margin) - tan(base_angle/2)))
         extrusion = max(0.0, 0.5 * tan(base_angle/2) - 0.5) if ext_front_view else 0.0
@@ -387,12 +387,12 @@ class Renderer:
         self.start_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
         # get folder name from outside
         self.folder_name = folder
-        
+
         # Get initial camera and output information
         # now origin camera data not need store, and no more need to use empty as proxy
         self.camera_rotation = list(self.camera.rotation_euler)
         self.IPD = self.camera.data.stereo.interocular_distance
-        
+
         # Set camera variables for proper result
         self.camera.data.type = 'PANO'
         self.camera.data.stereo.convergence_mode = 'PARALLEL'
@@ -443,12 +443,12 @@ class Renderer:
             props.trueTopBottom = self.stereo_mode == 'TOPBOTTOM'
             self.use_sidebyside_crosseyed = self.scene.render.image_settings.stereo_3d_format.use_sidebyside_crosseyed
             self.scene.render.image_settings.stereo_3d_format.display_mode = 'TOPBOTTOM'
-        
+
         self.direction_offsets = self.find_direction_offsets()
-    
-    
+
+
     def cubemap_to_panorama(self, imageList, outputName):
-        
+
         # Generate the OpenGL shader
         pos = [(-1.0, -1.0, -1.0),  # left,  bottom, back
                (-1.0,  1.0, -1.0),  # left,  top,    back
@@ -459,12 +459,12 @@ class Renderer:
                   (1.0, -1.0),   # right, bottom
                   (1.0,  1.0)]   # right, top
         vertexIndices = [(0, 3, 1),(3, 0, 2)]
-        
+
         batch = batch_for_shader(self.shader, 'TRIS', {
             "aVertexPosition": pos,
             "aVertexTextureCoord": coords
         }, indices=vertexIndices)
-        
+
         # Change the color space of all of the images to Linear
         # and load them into OpenGL textures
         textures = []
@@ -472,7 +472,7 @@ class Renderer:
             image.colorspace_settings.name = 'Linear' if bpy.app.version < (4, 0, 0) else 'Linear Rec.709'
             tex = gpu.texture.from_image(image)
             textures.append(tex)
-        
+
         # set the size of the final image
         width = self.image_size[0]
         height = self.image_size[1]
@@ -526,12 +526,12 @@ class Renderer:
 
         # Unload the offscreen texture
         offscreen.free()
-        
+
         # Remove the cubemap textures:
         del textures
         for image in imageList:
             bpy.data.images.remove(image)
-        
+
         # Copy the pixels from the buffer to an image object
         if not outputName in bpy.data.images.keys():
             bpy.data.images.new(outputName, width, height, alpha = True if self.color_mode=='RGBA' else False)
@@ -541,9 +541,9 @@ class Renderer:
         imageRes.pixels.foreach_set(buffer)
         return imageRes
 
-    
+
     def find_direction_offsets(self):
-        
+
         # update location and rotation of our camera from origin one
         self.camera.matrix_world = self.camera_origin.matrix_world
         # Calculate the pointing directions of the camera for each face of the cube
@@ -570,11 +570,11 @@ class Renderer:
         eul.rotate_axis('Y', pi)
         direction_offsets['right'] = list(eul)
         return direction_offsets
-    
-    
+
+
     def set_camera_direction(self, direction):
-        
-        # Set the camera to the required postion    
+
+        # Set the camera to the required postion
         self.camera.rotation_euler = self.direction_offsets[direction]
         self.camera.data.shift_x = self.camera_settings[direction][0]
         self.camera.data.shift_y = self.camera_settings[direction][1]
@@ -617,8 +617,8 @@ class Renderer:
                 except Exception as e:
                     print('at remove temporary file.', e)
         self.createdFiles.clear()
-    
-    
+
+
     def render_image(self, direction):
 
         # Render the image and load it into the script
@@ -650,7 +650,7 @@ class Renderer:
                 self.createdFiles.add(self.scene.render.filepath)
                 renderedImageL = bpy.data.images.load(self.scene.render.filepath)
                 renderedImageL.name = nameL
-                
+
                 self.camera.location = [tmp_loc[0]-(0.5*self.IPD*cos(camera_angle)),\
                                         tmp_loc[1]-(0.5*self.IPD*sin(camera_angle)),\
                                         tmp_loc[2]]
@@ -664,7 +664,7 @@ class Renderer:
 
                 self.scene.render.use_multiview = True
                 self.camera.location = tmp_loc
-            
+
             else:
                 if name in bpy.data.images:
                     bpy.data.images.remove(bpy.data.images[name])
@@ -681,7 +681,7 @@ class Renderer:
                 imageLen = len(renderedImage.pixels)
                 renderedImageL = bpy.data.images.new(nameL, self.scene.render.resolution_x, self.scene.render.resolution_y)
                 renderedImageR = bpy.data.images.new(nameR, self.scene.render.resolution_x, self.scene.render.resolution_y)
-                
+
                 # Split the render into two images
                 buff = np.empty((imageLen,), dtype=np.float32)
                 renderedImage.pixels.foreach_get(buff)
@@ -704,24 +704,24 @@ class Renderer:
             renderedImageL = bpy.data.images.load(self.scene.render.filepath)
             renderedImageL.name = name
             renderedImageR = None
-        
+
         self.scene.render.filepath = org_filepath
         self.scene.render.image_settings.file_format = org_file_format
         return renderedImageL, renderedImageR
-    
-    
+
+
     def render_images(self):
-        
+
         # update focus distance if focus object is set
         if self.camera.data.dof.use_dof and self.camera_origin.data.dof.focus_object is not None:
             focus_location = self.camera_origin.data.dof.focus_object.matrix_world.translation
             icm = self.camera_origin.matrix_world.inverted_safe()
             self.camera.data.dof.focus_distance = abs((icm @ focus_location).z)
-        
+
         # Render the images for every direction
         image_list_l = []
         image_list_r = []
-        
+
         directions = ['front']
         if not self.no_side_images:
             directions += ['left', 'right']
@@ -736,14 +736,14 @@ class Renderer:
             imgl, imgr = self.render_image(direction)
             image_list_l.insert(0, imgl)
             image_list_r.insert(0, imgr)
-        
+
         return image_list_l, image_list_r
 
 
     def render_and_save(self):
 
         frame_step = self.scene.frame_step
-        
+
         # Render the images and return their names
         imageList, imageList2 = self.render_images()
         if self.is_animation:
@@ -760,7 +760,7 @@ class Renderer:
             # If it doesn't already exist, create an image object to store the resulting render
             if not image_name in bpy.data.images.keys():
                 imageResult = bpy.data.images.new(image_name, leftImage.size[0], 2 * leftImage.size[1])
-            
+
             imageResult = bpy.data.images[image_name]
             img1arr = np.empty((leftImage.size[1], 4 * leftImage.size[0]), dtype=np.float32)
             leftImage.pixels.foreach_get(img1arr.ravel())
@@ -783,7 +783,7 @@ class Renderer:
 
         else:
             imageResult = self.cubemap_to_panorama(imageList, "RenderResult")
-        
+
         save_start_time = time.time()
         if self.is_animation:
             imageResult.filepath_raw = self.path+self.folder_name+image_name
