@@ -679,8 +679,8 @@ class Renderer:
                 renderedImage.name = name
                 renderedImage.colorspace_settings.name = 'Linear' if bpy.app.version < (4, 0, 0) else 'Linear Rec.709'
                 imageLen = len(renderedImage.pixels)
-                renderedImageL = bpy.data.images.new(nameL, self.scene.render.resolution_x, self.scene.render.resolution_y)
-                renderedImageR = bpy.data.images.new(nameR, self.scene.render.resolution_x, self.scene.render.resolution_y)
+                renderedImageL = bpy.data.images.new(nameL, self.scene.render.resolution_x, self.scene.render.resolution_y, alpha = True if self.color_mode=='RGBA' else False)
+                renderedImageR = bpy.data.images.new(nameR, self.scene.render.resolution_x, self.scene.render.resolution_y, alpha = True if self.color_mode=='RGBA' else False)
 
                 # Split the render into two images
                 buff = np.empty((imageLen,), dtype=np.float32)
@@ -759,7 +759,7 @@ class Renderer:
 
             # If it doesn't already exist, create an image object to store the resulting render
             if not image_name in bpy.data.images.keys():
-                imageResult = bpy.data.images.new(image_name, leftImage.size[0], 2 * leftImage.size[1])
+                imageResult = bpy.data.images.new(image_name, leftImage.size[0], 2 * leftImage.size[1], alpha = True if self.color_mode=='RGBA' else False)
 
             imageResult = bpy.data.images[image_name]
             img1arr = np.empty((leftImage.size[1], 4 * leftImage.size[0]), dtype=np.float32)
