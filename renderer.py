@@ -762,6 +762,7 @@ class Renderer:
                 imageResult = bpy.data.images.new(image_name, leftImage.size[0], 2 * leftImage.size[1], alpha = True if self.color_mode=='RGBA' else False)
 
             imageResult = bpy.data.images[image_name]
+            imageResult.file_format = self.fformat
             img1arr = np.empty((leftImage.size[1], 4 * leftImage.size[0]), dtype=np.float32)
             leftImage.pixels.foreach_get(img1arr.ravel())
             img2arr = np.empty((rightImage.size[1], 4 * rightImage.size[0]), dtype=np.float32)
