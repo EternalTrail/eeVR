@@ -269,6 +269,8 @@ class Renderer:
         self.fext = os.path.splitext(bpy.context.scene.render.frame_path(preview=True))[-1]
         self.fformat = bpy.context.scene.render.image_settings.file_format.format()
         self.color_mode = bpy.context.scene.render.image_settings.color_mode
+        self.is_float = True if self.fformat in ['CINEON', 'DPX', 'OPEN_EXR_MULTILAYER', 'OPEN_EXR', 'HDR'] else False
+        self.has_alpha = True if self.color_mode == 'RGBA' else False
         # save original active object
         self.viewlayer_active_object_origin = context.view_layer.objects.active
         # save original active camera handle
@@ -296,9 +298,10 @@ class Renderer:
         self.camera.data.clip_start = self.camera_origin.data.clip_start
         self.camera.data.clip_end = self.camera_origin.data.clip_end
         self.path = bpy.path.abspath(context.preferences.filepaths.render_output_directory)
-        self.tmpdir = bpy.path.abspath(context.preferences.filepaths.temporary_directory)
-        self.tmpfile_format = self.preferences.temporal_file_format
-        self.tmpfext = '.tga' if self.tmpfile_format == 'TARGA_RAW' else '.png'
+        self.tmpdir = bpy.path.abspath(context.preferences.filepaths.temporary_directory if context.preferences.filepaths.temporary_directory else
+                                       bpy.app.tempdir)
+        self.tmpfile_format = 'OPEN_EXR' if self.is_float else self.preferences.temporal_file_format
+        self.tmpfext = '.exr' if self.tmpfile_format == 'OPEN_EXR' else '.tga' if self.tmpfile_format == 'TARGA_RAW' else '.png'
         self.is_stereo = context.scene.render.use_multiview
         self.is_animation = is_animation
         is_dome = props.renderModeEnum == 'DOME'
@@ -534,7 +537,7 @@ class Renderer:
 
         # Copy the pixels from the buffer to an image object
         if not outputName in bpy.data.images.keys():
-            bpy.data.images.new(outputName, width, height, alpha = True if self.color_mode=='RGBA' else False)
+            bpy.data.images.new(outputName, width, height, float_buffer=self.is_float, alpha=self.has_alpha)
         imageRes = bpy.data.images[outputName]
         imageRes.file_format = self.fformat
         imageRes.scale(width, height)
@@ -591,7 +594,7 @@ class Renderer:
             self.scene.render.pixel_aspect_x = 1 / self.camera_settings[direction][5]
             self.scene.render.pixel_aspect_y = 1.0
         self.scene.render.resolution_percentage = 100
-        print(f"{direction} : {self.scene.render.resolution_x} x {self.scene.render.resolution_y} {degrees(self.camera.data.angle):.2f}° [{self.camera.data.shift_x:.3f}, {self.camera.data.shift_y:.3f}] ({self.scene.render.pixel_aspect_x:.2f} : {self.scene.render.pixel_aspect_y:.2f}) fstop={self.camera.data.dof.aperture_fstop:.2f}")
+        print(f"{direction} float:{self.is_float} alpha:{self.has_alpha} : {self.scene.render.resolution_x} x {self.scene.render.resolution_y} {degrees(self.camera.data.angle):.2f}° [{self.camera.data.shift_x:.3f}, {self.camera.data.shift_y:.3f}] ({self.scene.render.pixel_aspect_x:.2f} : {self.scene.render.pixel_aspect_y:.2f}) fstop={self.camera.data.dof.aperture_fstop:.2f}")
 
 
     def clean_up(self, context):
@@ -679,8 +682,8 @@ class Renderer:
                 renderedImage.name = name
                 renderedImage.colorspace_settings.name = 'Linear' if bpy.app.version < (4, 0, 0) else 'Linear Rec.709'
                 imageLen = len(renderedImage.pixels)
-                renderedImageL = bpy.data.images.new(nameL, self.scene.render.resolution_x, self.scene.render.resolution_y, alpha = True if self.color_mode=='RGBA' else False)
-                renderedImageR = bpy.data.images.new(nameR, self.scene.render.resolution_x, self.scene.render.resolution_y, alpha = True if self.color_mode=='RGBA' else False)
+                renderedImageL = bpy.data.images.new(nameL, self.scene.render.resolution_x, self.scene.render.resolution_y, float_buffer=self.is_float, alpha=self.has_alpha)
+                renderedImageR = bpy.data.images.new(nameR, self.scene.render.resolution_x, self.scene.render.resolution_y, float_buffer=self.is_float, alpha=self.has_alpha)
 
                 # Split the render into two images
                 buff = np.empty((imageLen,), dtype=np.float32)
@@ -759,7 +762,7 @@ class Renderer:
 
             # If it doesn't already exist, create an image object to store the resulting render
             if not image_name in bpy.data.images.keys():
-                imageResult = bpy.data.images.new(image_name, leftImage.size[0], 2 * leftImage.size[1], alpha = True if self.color_mode=='RGBA' else False)
+                imageResult = bpy.data.images.new(image_name, leftImage.size[0], 2 * leftImage.size[1], float_buffer=self.is_float, alpha=self.has_alpha)
 
             imageResult = bpy.data.images[image_name]
             imageResult.file_format = self.fformat
@@ -794,7 +797,7 @@ class Renderer:
             imageResult.filepath_raw = self.path+image_name
             imageResult.save()
 
-        print(f'''Saved '{imageResult.filepath_raw}'
+        print(f'''Saved '{imageResult.filepath_raw} float:{self.is_float} alpha:{self.has_alpha}'
  Time : {round(time.time() - start_time, 2)} seconds (Saving : {round(time.time() - save_start_time, 2)} seconds)
  ''')
 
