@@ -330,7 +330,7 @@ class Renderer:
         if props.fovModeEnum == '180':
             resolution_rate = (0.5 * coeff, 0.5 * coeff)
         elif props.fovModeEnum == '360':
-            resolution_rate = (0.25 * coeff, (0.5 if is_dome else 0.25) * coeff)
+            resolution_rate = (0.25 * coeff, (0.25 if is_dome else 0.5) * coeff)
         elif is_dome:
             resolution_rate = ((pi/2) / max(h_fov, v_fov) * coeff, (pi/2) / max(h_fov, v_fov) * coeff)
         else:
