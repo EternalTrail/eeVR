@@ -158,7 +158,7 @@ class RenderPanel(Panel):
     bl_category = "eeVR"
     bl_options = {'DEFAULT_CLOSED'}
 
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
 
     @classmethod
     def poll(cls, context):
