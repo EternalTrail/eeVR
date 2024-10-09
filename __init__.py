@@ -22,7 +22,7 @@ bl_info = {
     "name": "eeVR",
     "description": "Render in different projections using Eevee engine",
     "author": "EternalTrail",
-    "version": (1, 0, 0),
+    "version": (1, 0, 1),
     "blender": (3, 6, 0),
     "location": "Properties > Render Tab (Available when EEVEE or Workbench)",
     "wiki_url": "https://github.com/EternalTrail/eeVR",
@@ -36,7 +36,7 @@ def has_invalid_condition(self : 'Operator', context : 'Context'):
     if context.scene.camera == None:
         self.report({'ERROR'}, "eeVR ERROR : Scene camera is not set.")
         return True
-    if context.active_object.mode != 'OBJECT':
+    if context.active_object != None and context.active_object.mode != 'OBJECT':
         self.report({'ERROR'}, "eeVR ERROR : Active object's mode is not object mode.")
         return True
     return False
